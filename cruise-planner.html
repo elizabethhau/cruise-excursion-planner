@@ -1857,11 +1857,22 @@ function showCredsModal() {
 function hideCredsModal() {
   document.getElementById('modal-creds').classList.remove('active');
 }
-function saveCreds() {
+async function saveCreds() {
   const apiKey = document.getElementById('input-apikey').value.trim();
   const clientId = document.getElementById('input-clientid').value.trim();
   const spreadsheetId = document.getElementById('input-sheetid').value.trim();
   if (!apiKey || !spreadsheetId) { showToast('API Key and Spreadsheet ID are required'); return; }
+
+  // Validate: can we reach the spreadsheet with this API key?
+  showToast('Validating…');
+  const testUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=spreadsheetId&key=${apiKey}`;
+  let testOk = false;
+  try { testOk = (await fetch(testUrl)).ok; } catch {}
+  if (!testOk) {
+    showToast('❌ Spreadsheet not found — check ID and sharing settings', 5000);
+    return; // don't save bad creds
+  }
+
   STATE.creds = { apiKey, clientId, spreadsheetId };
   localStorage.setItem('cp_apiKey', apiKey);
   localStorage.setItem('cp_clientId', clientId);
