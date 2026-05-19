@@ -1813,6 +1813,7 @@ function saveCreds() {
   localStorage.setItem('cp_spreadsheetId', spreadsheetId);
   hideCredsModal();
   showToast('Credentials saved');
+  renderCurrentTab();
   syncFromSheets().then(() => startPolling());
 }
 function skipCreds() {
