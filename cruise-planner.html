@@ -1827,7 +1827,12 @@ function init() {
 function initApp() {
   renderCurrentTab();
   if (STATE.creds.apiKey && STATE.creds.spreadsheetId) {
-    syncFromSheets().then(() => startPolling());
+    const start = () => syncFromSheets().then(() => startPolling());
+    if (STATE.accessToken) {
+      initSheets().then(start); // token cached in sessionStorage — init sheets immediately
+    } else {
+      start(); // no token yet; reads may return empty until user authenticates
+    }
   }
   updateSyncBadge();
 }
