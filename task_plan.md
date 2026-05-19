@@ -186,6 +186,29 @@ Sub-tasks:
 - [x] **9b** — Write CLAUDE.md for the repo
 - [ ] **9c** — Write Google Sheets setup instructions (separate doc or in-app help modal)
 
+### Phase 10 — Offering Selection During Voting
+**Status:** `complete`
+
+Users must pick a specific offering (date + time) when voting love/maybe on multi-offering excursions. The preference is stored alongside the vote (informational) and surfaces in the Lock Modal so Elizabeth can book the correct offering per person.
+
+**Decisions (from grill-me session):**
+- Votes sheet gets 2 new columns: `OfferingDate`, `OfferingTime`
+- Selector only shown on multi-offering excursions; single-offering auto-selects silently
+- Love/maybe blocked until an offering is selected; skip has no selector
+- Offering persists across vote-sentiment changes (love→maybe); always editable inline
+- Vote summary on card shows love/maybe counts split by offering (e.g. "❤️ Dec 31 × 2, Jan 1 × 1")
+- Lock Modal shows each person's preferred offering next to their name
+- Existing love/maybe votes with no offering get a subtle "pick a date ↑" nudge on the card
+
+Sub-tasks:
+- [x] **10a** — Schema + sync: add `OfferingDate`, `OfferingTime` to Votes sheet header; update `syncFromSheets` to read them into `STATE.votes[code][person]` as `{vote, offering_date, offering_time}`
+- [x] **10b** — STATE.votes structure: migrate all reads of `STATE.votes[code][person]` (currently a bare string) to the new object shape `{vote, offering_date, offering_time}`; added `voteOf(code, person)` helper
+- [x] **10c** — Vote card UI: inline radio buttons for multi-offering excursions; required before love/maybe is accepted; skip shows nothing; single-offering silent
+- [x] **10d** — `castVote`: include `offering_date` + `offering_time` in the row appended to Sheets
+- [x] **10e** — Nudge: detect love/maybe in `STATE.votes` with no `offering_date`; render "👆 Pick a date/time above" indicator
+- [x] **10f** — Vote split summary: per-offering breakdown on multi-offering excursion cards (e.g. "❤️ Dec 31 8:00 AM ×2")
+- [x] **10g** — Lock Modal: show `"→ Dec 31 · 8:00 AM"` (or "no pref") next to each person's name in the people-selection list
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|

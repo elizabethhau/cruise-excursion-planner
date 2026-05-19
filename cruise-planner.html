@@ -546,6 +546,43 @@ img { display: block; max-width: 100%; }
   font-weight: 500;
 }
 
+/* offering selector (radio buttons on vote card) */
+.offering-selector {
+  border-top: 1px solid var(--gray-100);
+  padding: 10px 14px 6px;
+}
+.offering-selector-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gray-400);
+  margin-bottom: 6px;
+}
+.offering-radio-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  font-size: 13px;
+  color: var(--gray-700);
+  cursor: pointer;
+  border-bottom: 1px solid var(--gray-100);
+}
+.offering-radio-label:last-child { border-bottom: none; }
+.offering-radio-label input[type="radio"] { accent-color: var(--teal); width: 16px; height: 16px; flex-shrink: 0; }
+.offering-radio-label:has(input:checked) { color: var(--teal-text); font-weight: 500; }
+
+/* nudge for love/maybe votes missing a date selection */
+.offering-nudge {
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--yellow-text);
+  background: var(--yellow-bg);
+  border-top: 1px solid rgba(217,119,6,0.2);
+}
+
 /* conflict banners */
 .conflict-warn {
   padding: 8px 14px;
@@ -1605,7 +1642,7 @@ function activityBadge(level) {
 }
 function portCompletionForPerson(portIdx, person) {
   const codes = EXCURSION_DATA.ports[portIdx].excursions.map(e => e.code);
-  return codes.some(code => ['love','interested'].includes((STATE.votes[code]||{})[person]));
+  return codes.some(code => ['love','interested'].includes(voteOf(code, person)));
 }
 function portCompletionStatus(portIdx) {
   // how many family members have voted ≥1 love/interested in this port
@@ -1627,6 +1664,11 @@ function showToast(msg, ms = 2000) {
 }
 
 function isElizabeth() { return STATE.user === 'Elizabeth'; }
+
+// Returns the vote string ('love'|'interested'|'skip'|null) for a person on an excursion
+function voteOf(code, person) {
+  return ((STATE.votes[code] || {})[person] || {}).vote || null;
+}
 
 /* ─────────────────────────────────────────────────
    LOOKUP HELPERS
@@ -1686,11 +1728,11 @@ function conflictLevelForExcursion(exc, person) {
     }
   }
   // Check love-vote potential conflicts
-  if ((STATE.votes[exc.code]||{})[person] === 'love') {
+  if (voteOf(exc.code, person) === 'love') {
     for (const off of exc.offerings) {
       for (const code2 of Object.keys(STATE.votes)) {
         if (code2 === exc.code) continue;
-        if ((STATE.votes[code2]||{})[person] !== 'love') continue;
+        if (voteOf(code2, person) !== 'love') continue;
         const exc2 = findExcursion(code2);
         if (!exc2) continue;
         for (const off2 of exc2.offerings) {
@@ -1827,7 +1869,7 @@ function skipCreds() {
 ───────────────────────────────────────────────── */
 const SHEET_NAMES = { votes:'Votes', schedule:'Schedule', excursions:'Excursions', requests:'Requests' };
 const SHEET_HEADERS = {
-  Votes:      ['Timestamp','PersonName','TourCode','Vote'],
+  Votes:      ['Timestamp','PersonName','TourCode','Vote','OfferingDate','OfferingTime'],
   Schedule:   ['Timestamp','PersonName','TourCode','Date','DepartureTime','Status'],
   Excursions: ['Code','Name','Port','DurationHrs','PriceUSD','RetailPriceUSD','ActivityLevel','MealIncluded','Accessible','GoLocal','FreeShore'],
   Requests:   ['Timestamp','RequesterName','TourCode','Date','DepartureTime','Note'],
@@ -1949,17 +1991,17 @@ async function syncFromSheets() {
   updateSyncBadge('syncing');
   try {
     const [votesRaw, schedRaw, reqRaw] = await Promise.all([
-      sheetsGet('Votes!A2:D'),
+      sheetsGet('Votes!A2:F'),
       sheetsGet('Schedule!A2:F'),
       sheetsGet('Requests!A2:F'),
     ]);
 
     if (votesRaw) {
       STATE.votes = {};
-      for (const [ts, person, code, vote] of votesRaw) {
+      for (const [ts, person, code, vote, offering_date='', offering_time=''] of votesRaw) {
         if (!code) continue;
         if (!STATE.votes[code]) STATE.votes[code] = {};
-        STATE.votes[code][person] = vote;
+        STATE.votes[code][person] = { vote, offering_date: offering_date||null, offering_time: offering_time||null };
       }
     }
     if (schedRaw) {
@@ -2045,13 +2087,12 @@ async function processQueue() {
 /* ─────────────────────────────────────────────────
    WRITE OPERATIONS
 ───────────────────────────────────────────────── */
-async function castVote(code, vote) {
-  // Optimistic update
+async function castVote(code, vote, offering_date, offering_time) {
   if (!STATE.votes[code]) STATE.votes[code] = {};
-  STATE.votes[code][STATE.user] = vote;
+  STATE.votes[code][STATE.user] = { vote, offering_date: offering_date||null, offering_time: offering_time||null };
   const ts = new Date().toISOString();
   const authed = await requireAuth();
-  const row = [ts, STATE.user, code, vote];
+  const row = [ts, STATE.user, code, vote, offering_date||'', offering_time||''];
   if (authed) {
     await sheetsAppend('Votes', row);
   } else {
@@ -2149,7 +2190,10 @@ function renderVoteTab() {
 }
 
 function buildExcursionCard(exc) {
-  const myVote = (STATE.votes[exc.code] || {})[STATE.user];
+  const myVoteObj = (STATE.votes[exc.code] || {})[STATE.user];
+  const myVote = myVoteObj?.vote || null;
+  const myOfferingDate = myVoteObj?.offering_date || null;
+  const myOfferingTime = myVoteObj?.offering_time || null;
   const conflictLevel = conflictLevelForExcursion(exc, STATE.user);
 
   const card = document.createElement('div');
@@ -2164,31 +2208,70 @@ function buildExcursionCard(exc) {
     conflictHTML = `<div class="conflict-warn potential">🟡 Potential conflict with another love vote</div>`;
   }
 
-  // Offerings
-  const offeringsHTML = exc.offerings.map(o => `
-    <div class="exc-offering-row">
-      <span class="offering-date">${fmtDate(o.date)}</span>
-      <span class="offering-time">${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
-    </div>
-  `).join('');
+  // Offerings section:
+  // Multi-offering → interactive radio selector (replaces static list + also-available banner)
+  // Single-offering → static date/time row only
+  let offeringsSection = '';
+  if (exc.offerings.length > 1) {
+    const radios = exc.offerings.map((o, i) => {
+      const selected = myOfferingDate === o.date && myOfferingTime === o.departure_time;
+      return `<label class="offering-radio-label">
+        <input type="radio" name="offering-${exc.code}" value="${i}" ${selected ? 'checked' : ''}>
+        <span>${fmtDate(o.date)} · ${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
+      </label>`;
+    }).join('');
+    offeringsSection = `<div class="offering-selector"><div class="offering-selector-label">📅 Select your date/time</div>${radios}</div>`;
+  } else {
+    offeringsSection = `<div class="exc-offerings">${exc.offerings.map(o => `
+      <div class="exc-offering-row">
+        <span class="offering-date">${fmtDate(o.date)}</span>
+        <span class="offering-time">${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
+      </div>`).join('')}</div>`;
+  }
 
-  // Also-available banner (for multi-offering excursions)
-  const alsoAvailHTML = exc.offerings.length > 1
-    ? `<div class="also-available">📅 Also available: ${exc.offerings.map(o => fmtDate(o.date) + ' ' + formatTime(o.departure_time)).join(' · ')}</div>`
-    : '';
+  // Nudge: user has love/interested but never picked an offering on a multi-offering excursion
+  const needsNudge = exc.offerings.length > 1 && (myVote === 'love' || myVote === 'interested') && !myOfferingDate;
+  const nudgeHTML = needsNudge ? `<div class="offering-nudge">👆 Pick a date/time above to complete your vote</div>` : '';
 
   // Vote counts
   const votes = STATE.votes[exc.code] || {};
-  const loveCount = Object.values(votes).filter(v => v === 'love').length;
-  const intCount  = Object.values(votes).filter(v => v === 'interested').length;
-  const skipCount = Object.values(votes).filter(v => v === 'skip').length;
-  const voteCountHTML = (loveCount + intCount + skipCount > 0)
-    ? `<div class="vote-counts">
+  let voteCountHTML = '';
+  if (exc.offerings.length > 1) {
+    // Group love/interested by offering; skip is flat
+    const loveBy = {}, intBy = {};
+    let skipCount = 0, unspecLove = 0, unspecInt = 0;
+    for (const vObj of Object.values(votes)) {
+      if (!vObj?.vote) continue;
+      const { vote: v, offering_date: od, offering_time: ot } = vObj;
+      if (v === 'skip') { skipCount++; continue; }
+      if (!od) { v === 'love' ? unspecLove++ : unspecInt++; continue; }
+      const key = `${od}|${ot}`;
+      if (v === 'love') loveBy[key] = (loveBy[key]||0) + 1;
+      if (v === 'interested') intBy[key] = (intBy[key]||0) + 1;
+    }
+    const parts = [];
+    for (const o of exc.offerings) {
+      const key = `${o.date}|${o.departure_time}`;
+      const lbl = `${fmtDate(o.date)} ${formatTime(o.departure_time)}`;
+      if (loveBy[key]) parts.push(`❤️ ${lbl} ×${loveBy[key]}`);
+      if (intBy[key])  parts.push(`🤔 ${lbl} ×${intBy[key]}`);
+    }
+    if (unspecLove) parts.push(`❤️ ? ×${unspecLove}`);
+    if (unspecInt)  parts.push(`🤔 ? ×${unspecInt}`);
+    if (skipCount)  parts.push(`❌ ${skipCount}`);
+    if (parts.length) voteCountHTML = `<div class="vote-counts">${parts.map(p=>`<span>${p}</span>`).join('')}</div>`;
+  } else {
+    const loveCount = Object.values(votes).filter(v => v?.vote === 'love').length;
+    const intCount  = Object.values(votes).filter(v => v?.vote === 'interested').length;
+    const skipCount = Object.values(votes).filter(v => v?.vote === 'skip').length;
+    if (loveCount + intCount + skipCount > 0) {
+      voteCountHTML = `<div class="vote-counts">
         ${loveCount > 0 ? `<span>❤️ ${loveCount}</span>` : ''}
         ${intCount  > 0 ? `<span>🤔 ${intCount}</span>` : ''}
         ${skipCount > 0 ? `<span>❌ ${skipCount}</span>` : ''}
-       </div>`
-    : '';
+      </div>`;
+    }
+  }
 
   // Activity + icon badges
   const badges = [
@@ -2210,8 +2293,8 @@ function buildExcursionCard(exc) {
       </div>
       <div class="exc-meta">${badges}</div>
     </div>
-    <div class="exc-offerings">${offeringsHTML}</div>
-    ${alsoAvailHTML}
+    ${offeringsSection}
+    ${nudgeHTML}
     ${conflictHTML}
     <div class="vote-area">
       <div class="vote-row">
@@ -2236,14 +2319,25 @@ function buildExcursionCard(exc) {
 }
 
 async function handleVote(code, vote) {
-  // Toggle off if same vote tapped again
-  const current = (STATE.votes[code] || {})[STATE.user];
+  const current = voteOf(code, STATE.user);
   const newVote = (current === vote) ? null : vote;
 
   if (newVote === null) {
     delete (STATE.votes[code] || {})[STATE.user];
+  } else if (newVote === 'skip') {
+    await castVote(code, 'skip', null, null);
   } else {
-    await castVote(code, newVote);
+    // love / interested — require offering selection on multi-offering excursions
+    const exc = findExcursion(code);
+    if (exc.offerings.length > 1) {
+      const sel = document.querySelector(`input[name="offering-${code}"]:checked`);
+      if (!sel) { showToast('Please select a date/time first ↑'); return; }
+      const o = exc.offerings[parseInt(sel.value)];
+      await castVote(code, newVote, o.date, o.departure_time);
+    } else {
+      const o = exc.offerings[0];
+      await castVote(code, newVote, o.date, o.departure_time);
+    }
   }
 
   // Re-render the single card
@@ -2358,7 +2452,7 @@ function renderDashTab() {
     // Rank excursions by score
     const ranked = port.excursions.map(exc => {
       const votes = STATE.votes[exc.code] || {};
-      const score = Object.values(votes).reduce((s,v) => s + (v==='love'?2:v==='interested'?1:0), 0);
+      const score = Object.values(votes).reduce((s,v) => s + (v?.vote==='love'?2:v?.vote==='interested'?1:0), 0);
       return { exc, votes, score };
     }).sort((a,b) => b.score - a.score);
 
@@ -2370,7 +2464,7 @@ function renderDashTab() {
 
       // Avatar chips
       const avatars = FAMILY.map(p => {
-        const v = votes[p];
+        const v = votes[p]?.vote;
         if (!v) return '';
         return `<span class="avatar-chip ${v}">${p.slice(0,3)}</span>`;
       }).filter(Boolean).join('');
@@ -2434,13 +2528,20 @@ function openLockModal(code, preselectedPerson) {
     `<option value="${i}">${fmtDate(o.date)} · ${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</option>`
   ).join('');
 
-  // Member checkboxes
+  // Member checkboxes with offering preference
   const memberChecks = FAMILY.map(p => {
     const alreadyBooked = STATE.schedule.some(s => s.tourCode === code && s.personName === p && s.status === 'booked');
     const checked = alreadyBooked || p === preselectedPerson ? 'checked' : '';
+    const vObj = (STATE.votes[code] || {})[p];
+    let prefLabel = '';
+    if (vObj?.offering_date) {
+      prefLabel = ` <span style="color:var(--teal);font-size:12px;">→ ${fmtDate(vObj.offering_date)} · ${formatTime(vObj.offering_time)}</span>`;
+    } else if (vObj?.vote === 'love' || vObj?.vote === 'interested') {
+      prefLabel = ` <span style="color:var(--gray-400);font-size:12px;">→ no pref</span>`;
+    }
     return `<label style="display:flex;align-items:center;gap:8px;padding:8px 0;font-size:14px;border-bottom:1px solid var(--gray-100);">
       <input type="checkbox" ${checked} ${alreadyBooked ? 'disabled' : ''} value="${p}" class="lock-member-cb">
-      ${p}${alreadyBooked ? ' ✓ booked' : ''}
+      ${p}${alreadyBooked ? ' ✓ booked' : ''}${prefLabel}
     </label>`;
   }).join('');
 
