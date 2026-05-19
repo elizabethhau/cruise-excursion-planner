@@ -46,6 +46,8 @@ Dad, Mom, Elizabeth (admin 👑), Abby, Jonathan, Luke, James
 
 ## Phases
 
+> **Implementation note:** Phase 3 skeleton (HTML/CSS) is written first since it's the container for all other phases, even though it's listed as Phase 3.
+
 ### Phase 1 — Excursion JSON Data
 **Status:** `pending`
 Build the complete JSON object for all 88 excursions / 109 offerings.
@@ -53,6 +55,12 @@ Fields per excursion: code, name, duration_hrs, price_usd, retail_price_usd, act
 Fields per offering: date (YYYY-MM-DD), departure_time (HH:MM 24h)
 Flag: activity_level_needs_review: true on ALL entries.
 Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
+
+Sub-tasks:
+- [x] **1a** — Melbourne (11 exc, 24 offerings) + Hobart (1 exc, 1 offering); open `const EXCURSION_DATA`
+- [x] **1b** — Dunedin (11 exc, 12 offerings) + Christchurch (10 exc, 11 offerings) + Picton (8 exc, 8 offerings)
+- [x] **1c** — Wellington (9 exc, 11 offerings) + Gisborne (8 exc, 10 offerings)
+- [x] **1d** — Rotorua/Tauranga (16 exc, 16 offerings) + Bay of Islands (14 exc, 16 offerings); close const
 
 ### Phase 2 — Google Sheets Integration
 **Status:** `pending`
@@ -64,6 +72,14 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - 30s polling loop (foreground only, pause on visibilitychange)
 - Offline queue: localStorage buffer + "⏳ Pending sync" indicator + auto-retry
 
+Sub-tasks:
+- [x] **2a** — Creds modal UI + localStorage read/write for apiKey, clientId, spreadsheetId
+- [x] **2b** — GIS OAuth popup (initGIS, getAccessToken); sheetsGet(range) with API key; sheetsAppend(sheet, row) with OAuth
+- [x] **2c** — Sheet auto-init (check tabs exist, create if missing with headers)
+- [x] **2d** — syncFromSheets(): pull all Votes + Schedule + Requests, merge into STATE
+- [x] **2e** — 30s polling loop (startPolling/stopPolling, pause on visibilitychange)
+- [x] **2f** — Offline queue: buffer writes to localStorage, processQueue() on reconnect, sync badge
+
 ### Phase 3 — Core Shell & Flow A (Name Selection)
 **Status:** `pending`
 - HTML skeleton with bottom tab bar (Vote, Dashboard, Schedule, Settings)
@@ -71,6 +87,12 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - Color system: gray=incomplete, green=complete, yellow=partial/warn, red=conflict, teal=info/alternative, purple=Elizabeth admin
 - Flow A: "Who are you?" screen, 7 name buttons, store in localStorage
 - Permission layer: set isElizabeth flag, show/hide admin elements throughout
+
+Sub-tasks:
+- [x] **3a** — Create `cruise-planner.html`: DOCTYPE, viewport, Google Fonts, full CSS (variables, reset, layout, tab bar, card, badge, button, modal, utility classes)
+- [x] **3b** — HTML body: placeholder screen divs, tab bar markup, modal overlay skeleton
+- [x] **3c** — Core JS: FAMILY array, STATE object, toMins/addMins/formatTime/overlaps/fmtPrice helpers, render() router, init()
+- [x] **3d** — Flow A: renderNameScreen() — welcome hero + 7 name buttons; saveName() handler
 
 ### Phase 4 — Voting View (Flow B)
 **Status:** `pending`
@@ -80,6 +102,14 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - Live vote counts from Sheets data
 - "Also available" teal banner for multi-offering excursions
 - Conflict warnings: 🟡 potential (love vote overlaps) / 🔴 confirmed (overlaps booked)
+
+Sub-tasks:
+- [x] **4a** — renderVoteTab(): port pill nav (scrollable) with completion badges per person
+- [x] **4b** — renderExcursionCard(): name, code, offerings (date+formatted time+end time), fmtPrice, activity/meal/accessible/go_local badges
+- [x] **4c** — Vote buttons (min 44px): castLocalVote(), update STATE.votes, queue Sheets write, re-render badges
+- [x] **4d** — Live group vote counts on each card (tallied from STATE.votes)
+- [x] **4e** — "Also available" teal banner for multi-offering excursions
+- [x] **4f** — Conflict warnings on cards: 🟡 potential (love vote on same day) / 🔴 confirmed (overlaps booked)
 
 ### Phase 5 — Group Dashboard (Flow C)
 **Status:** `pending`
@@ -94,6 +124,14 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - Elizabeth-only: "Lock it in" with offering selector + member checkboxes + conflict pre-check
 - Non-Elizabeth: same view minus all Elizabeth-only elements; "Request booking" button instead
 
+Sub-tasks:
+- [x] **5a** — renderDashTab(): per-port accordion sections with completion summary
+- [x] **5b** — Per-port ranked excursion list (score = love×2 + maybe×1), avatar row (initials, colored by vote)
+- [x] **5c** — Elizabeth-only: global progress bar + "Ports ready to book" section + "Send reminder" clipboard
+- [x] **5d** — Elizabeth-only: "Lock it in" modal (offering selector + family member checkboxes + conflict pre-check + submit)
+- [x] **5e** — Elizabeth-only: Booking requests inbox (from STATE.requests)
+- [x] **5f** — Non-Elizabeth: "Request booking" button → submitRequest() flow
+
 ### Phase 6 — Personal Schedule (Flow D)
 **Status:** `pending`
 - Chronological itinerary grouped by date
@@ -104,6 +142,13 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - Resolve conflict flow: side-by-side, options (a) drop, (b) switch offering [teal banner], (c) contact Elizabeth [clipboard]
 - Export: plain-text schedule + copy-to-clipboard
 
+Sub-tasks:
+- [x] **6a** — renderScheduleTab(): group STATE.schedule entries by date, chronological order, date section headers
+- [x] **6b** — renderScheduleDay(): booked entry cards (name, time range, price, badge) + free-time gap labels
+- [x] **6c** — Conflict detection banner (red) when overlapping entries on same day
+- [ ] **6d** — Conflict resolve modal: side-by-side cards, (a) drop, (b) switch offering teal banner, (c) contact Elizabeth clipboard *(drop only implemented; full resolve modal deferred to ST-13)*
+- [x] **6e** — Export: build plain-text itinerary string, copy-to-clipboard button
+
 ### Phase 7 — Settings (Flow E)
 **Status:** `pending`
 - Change name (clears localStorage name)
@@ -112,17 +157,34 @@ Output: embedded as `const EXCURSION_DATA = {...}` JS constant in the HTML.
 - Toggle: Show accessible tours only
 - Toggle: Hide excursions over $X
 
+Sub-tasks:
+- [x] **7a** — renderSettingsTab(): change name button (clears cp_user, re-shows name screen)
+- [x] **7b** — Re-enter credentials button (re-shows creds modal)
+- [x] **7c** — Reset my votes: clear from STATE locally (Sheets rows remain; append-only model)
+- [x] **7d** — Accessible-only toggle + max-price filter (persist to localStorage, re-render vote tab)
+
 ### Phase 8 — Conflict Engine & Offline Queue
 **Status:** `pending`
 - Conflict detection: for same person + same date, check departure_time + duration_hrs overlaps
 - Apply at: Flow B card render, Flow C Lock pre-check, Flow D schedule render, after every sync
 - Offline queue: localStorage array of pending actions; retry on reconnect; "⏳ Pending sync" badge
 
+Sub-tasks:
+- [x] **8a** — getConflictsForPerson(person, date): returns array of overlapping {a, b} schedule entry pairs
+- [x] **8b** — Wire conflict detection into vote card render (Phase 4f) and schedule render (Phase 6c)
+- [x] **8c** — Wire conflict pre-check into Lock modal (Phase 5d): block submit if conflicts found
+- [x] **8d** — processQueue(): replay pending offline actions; show "⏳ Pending sync" badge in header when queue non-empty
+
 ### Phase 9 — Polish & Deliverables
 **Status:** `pending`
 - Console.log full JSON on load (for verification)
 - CLAUDE.md for the repo
 - Deliverable docs: Google Sheets setup steps, port-by-port summary, ambiguity log, known limitations
+
+Sub-tasks:
+- [x] **9a** — console.log EXCURSION_DATA on load; verify port/excursion/offering counts (88 exc / 109 offerings confirmed)
+- [x] **9b** — Write CLAUDE.md for the repo
+- [ ] **9c** — Write Google Sheets setup instructions (separate doc or in-app help modal)
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
