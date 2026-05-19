@@ -1581,7 +1581,13 @@ const STATE = {
     clientId:     localStorage.getItem('cp_clientId') || '',
     spreadsheetId:localStorage.getItem('cp_spreadsheetId') || '',
   },
-  accessToken:  null,  // never persisted to localStorage
+  accessToken:  (() => {
+    // Restore from sessionStorage if token hasn't expired yet
+    try {
+      const t = JSON.parse(sessionStorage.getItem('cp_token') || 'null');
+      return (t && t.exp > Date.now()) ? t.tok : null;
+    } catch { return null; }
+  })(),
   offlineQueue: JSON.parse(localStorage.getItem('cp_queue') || '[]'),
   filters: {
     accessibleOnly: localStorage.getItem('cp_filterAccessible') === 'true',
@@ -1977,6 +1983,10 @@ function initGISClient(resolve) {
     callback: (resp) => {
       if (resp.error) { resolve(false); return; }
       STATE.accessToken = resp.access_token;
+      // Google access tokens expire in ~1 hour; cache in sessionStorage so refreshes don't re-prompt
+      try {
+        sessionStorage.setItem('cp_token', JSON.stringify({ tok: resp.access_token, exp: Date.now() + 55 * 60 * 1000 }));
+      } catch {}
       initSheets(); // idempotent — creates tabs only if missing
       resolve(true);
     },
