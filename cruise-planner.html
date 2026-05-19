@@ -1955,15 +1955,22 @@ async function initSheets() {
     const allNames = Object.values(SHEET_NAMES);
     const missing = allNames.filter(n => !existingTitles.has(n));
     if (missing.length > 0) {
-      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+      const batchR = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${STATE.accessToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests: missing.map(n => ({ addSheet: { properties: { title: n } } })) }),
       });
+      if (!batchR.ok) {
+        const err = await batchR.json().catch(() => ({}));
+        console.error('initSheets batchUpdate failed', batchR.status, err);
+        showToast(`Sheet setup failed (${batchR.status}) — check console`, 5000);
+        return;
+      }
       // Write header rows for newly created tabs (except Excursions — handled below)
       for (const name of missing.filter(n => n !== 'Excursions')) {
         await sheetsAppend(name, SHEET_HEADERS[name]);
       }
+      showToast(`Created tabs: ${missing.join(', ')}`);
     }
 
     // Populate Excursions tab if empty — single PUT instead of 88 individual appends
@@ -1976,7 +1983,9 @@ async function initSheets() {
             e.retail_price_usd, e.activity_level, e.meal_included, e.accessible, e.go_local, e.free_shore]);
         }
       }
-      await sheetsUpdate('Excursions!A1', rows);
+      const ok = await sheetsUpdate('Excursions!A1', rows);
+      if (ok) showToast('Excursions data written to sheet ✓');
+      else showToast('Excursions write failed — check token', 4000);
     }
   } finally {
     _initSheetsRunning = false;
