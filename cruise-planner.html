@@ -1863,13 +1863,8 @@ function saveCreds() {
   hideCredsModal();
   showToast('Credentials saved — connecting…');
   renderCurrentTab();
-  requireAuth().then(authed => {
-    if (authed) {
-      initSheets().then(() => syncFromSheets().then(() => startPolling()));
-    } else {
-      syncFromSheets().then(() => startPolling());
-    }
-  });
+  // initSheets fires inside initGISClient callback; just sync after auth resolves
+  requireAuth().then(() => syncFromSheets().then(() => startPolling()));
 }
 function skipCreds() {
   hideCredsModal();
@@ -1919,39 +1914,66 @@ async function sheetsAppend(sheetName, row) {
   }
 }
 
-async function ensureSheetExists(sheetName) {
-  // Check if tab exists by trying to read it; if 400, create it
-  const { apiKey, spreadsheetId } = STATE.creds;
-  if (!apiKey || !spreadsheetId) return;
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetName}!A1?key=${apiKey}`;
-  const r = await fetch(url);
-  if (r.ok) return; // already exists
-  if (!STATE.accessToken) return; // can't create without auth
-  // Create the sheet
-  await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${STATE.accessToken}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] }),
-  });
-  // Write header row
-  await sheetsAppend(sheetName, SHEET_HEADERS[sheetName]);
+async function sheetsUpdate(range, rows) {
+  const { spreadsheetId } = STATE.creds;
+  if (!STATE.accessToken || !spreadsheetId) return false;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=RAW`;
+  try {
+    const r = await fetch(url, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${STATE.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ values: rows }),
+    });
+    return r.ok;
+  } catch { return false; }
 }
 
+let _initSheetsRunning = false;
 async function initSheets() {
-  for (const name of Object.values(SHEET_NAMES)) {
-    await ensureSheetExists(name);
-  }
-  // Populate Excursions tab
-  const existing = await sheetsGet('Excursions!A1');
-  if (!existing || existing.length <= 1) {
-    for (const port of EXCURSION_DATA.ports) {
-      for (const e of port.excursions) {
-        await sheetsAppend('Excursions', [
-          e.code, e.name, port.name, e.duration_hrs, e.price_usd,
-          e.retail_price_usd, e.activity_level, e.meal_included, e.accessible, e.go_local, e.free_shore
-        ]);
+  if (_initSheetsRunning) return;
+  _initSheetsRunning = true;
+  try {
+    const { apiKey, spreadsheetId } = STATE.creds;
+    if (!apiKey || !spreadsheetId || !STATE.accessToken) return;
+
+    // Find which tabs are missing with a single metadata read
+    const metaUrl = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title&key=${apiKey}`;
+    const metaR = await fetch(metaUrl);
+    const existingTitles = new Set();
+    if (metaR.ok) {
+      const meta = await metaR.json();
+      (meta.sheets || []).forEach(s => existingTitles.add(s.properties.title));
+    }
+
+    // Create all missing tabs in one batchUpdate
+    const allNames = Object.values(SHEET_NAMES);
+    const missing = allNames.filter(n => !existingTitles.has(n));
+    if (missing.length > 0) {
+      await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${STATE.accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests: missing.map(n => ({ addSheet: { properties: { title: n } } })) }),
+      });
+      // Write header rows for newly created tabs (except Excursions — handled below)
+      for (const name of missing.filter(n => n !== 'Excursions')) {
+        await sheetsAppend(name, SHEET_HEADERS[name]);
       }
     }
+
+    // Populate Excursions tab if empty — single PUT instead of 88 individual appends
+    const existing = await sheetsGet('Excursions!A1');
+    if (!existing || existing.length <= 1) {
+      const rows = [SHEET_HEADERS.Excursions];
+      for (const port of EXCURSION_DATA.ports) {
+        for (const e of port.excursions) {
+          rows.push([e.code, e.name, port.name, e.duration_hrs, e.price_usd,
+            e.retail_price_usd, e.activity_level, e.meal_included, e.accessible, e.go_local, e.free_shore]);
+        }
+      }
+      await sheetsUpdate('Excursions!A1', rows);
+    }
+  } finally {
+    _initSheetsRunning = false;
   }
 }
 
