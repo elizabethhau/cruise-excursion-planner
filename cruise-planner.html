@@ -1828,11 +1828,12 @@ function initApp() {
   renderCurrentTab();
   if (STATE.creds.apiKey && STATE.creds.spreadsheetId) {
     const start = () => syncFromSheets().then(() => startPolling());
-    if (STATE.accessToken) {
-      initSheets().then(start); // token cached in sessionStorage — init sheets immediately
-    } else {
-      start(); // no token yet; reads may return empty until user authenticates
-    }
+    // Always try to get a token first — returns immediately if sessionStorage has a valid one.
+    // When no cached token, shows Google account picker once so initSheets can create tabs.
+    requireAuth().then(authed => {
+      if (authed) initSheets().then(start);
+      else start();
+    });
   }
   updateSyncBadge();
 }
