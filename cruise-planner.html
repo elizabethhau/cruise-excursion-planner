@@ -1855,9 +1855,15 @@ function saveCreds() {
   localStorage.setItem('cp_clientId', clientId);
   localStorage.setItem('cp_spreadsheetId', spreadsheetId);
   hideCredsModal();
-  showToast('Credentials saved');
+  showToast('Credentials saved — connecting…');
   renderCurrentTab();
-  syncFromSheets().then(() => startPolling());
+  requireAuth().then(authed => {
+    if (authed) {
+      initSheets().then(() => syncFromSheets().then(() => startPolling()));
+    } else {
+      syncFromSheets().then(() => startPolling());
+    }
+  });
 }
 function skipCreds() {
   hideCredsModal();
@@ -1971,6 +1977,7 @@ function initGISClient(resolve) {
     callback: (resp) => {
       if (resp.error) { resolve(false); return; }
       STATE.accessToken = resp.access_token;
+      initSheets(); // idempotent — creates tabs only if missing
       resolve(true);
     },
   });
