@@ -2389,6 +2389,8 @@ async function handleVote(code, vote) {
 
   if (newVote === null) {
     delete (STATE.votes[code] || {})[STATE.user];
+    await castVote(code, '', null, null);
+    showToast('Vote removed');
   } else if (newVote === 'skip') {
     await castVote(code, 'skip', null, null);
   } else {

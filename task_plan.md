@@ -209,6 +209,20 @@ Sub-tasks:
 - [x] **10f** — Vote split summary: per-offering breakdown on multi-offering excursion cards (e.g. "❤️ Dec 31 8:00 AM ×2")
 - [x] **10g** — Lock Modal: show `"→ Dec 31 · 8:00 AM"` (or "no pref") next to each person's name in the people-selection list
 
+### Phase 11 — Undo Vote (Persist to Sheets)
+**Status:** `complete`
+
+Toggle-to-undo logic already existed in `handleVote` (line 2388) but only cleared local STATE — never wrote to Sheets. After sync, the vote returned.
+
+**Decisions (from grill-me session):**
+- Sentinel value: `''` (empty string) — `voteOf()` already returns `null` for `'' || null`, so no downstream rendering changes needed
+- Sheets load loop overwrites by row order (newest wins), so a later `''` row correctly cancels an earlier `'love'` row
+- Toast: `showToast('Vote removed')` for feedback
+- Scope: voting view only
+
+Sub-tasks:
+- [x] **11a** — `handleVote` undo branch: add `await castVote(code, '', null, null)` + `showToast('Vote removed')`
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|
