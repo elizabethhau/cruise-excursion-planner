@@ -48,9 +48,24 @@
 - EXCURSION_DATA: 9 ports, 88 excursions, 109 offerings (confirmed by grep count)
 - console.log fires on load with counts
 
+## Session 3 — 2026-05-20
+
+### Completed
+- [x] Restructured single HTML file into multi-file ES module architecture (cruise-planner.html, styles.css, data.js, state.js, core.js, app.js)
+- [x] Added Node.js localStorage/sessionStorage guards in state.js for test compatibility
+- [x] Set up `node tests.js` test runner (no install needed)
+- [x] TDD: `summarizeVotes(votesByPerson, offerings)` — 7 tests, all passing
+- [x] Wired `summarizeVotes` into app.js, replacing 3 scattered vote-counting sites
+
+### Pending
+- [ ] Write tests for conflict engine (`getConflictsForPerson`, `conflictLevelForExcursion`)
+- [ ] Extract + test sync pipeline: `fetchSheetsData`, `parseSheetsData`, `applySyncResult` (currently one monolithic block in app.js)
+- [ ] Extract + test offering selector rendering: `renderOfferingOptions` (currently inline in the card renderer)
+
 ## Test Results
 | Phase | Test | Result |
 |---|---|---|
 | Data | grep count of excursions (88) | ✅ Pass |
 | Data | grep count of offerings (109) | ✅ Pass |
 | Data | File opens in browser | ✅ Pass |
+| core.js | summarizeVotes — 7 behaviors | ✅ Pass |
