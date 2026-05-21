@@ -27,11 +27,11 @@ Build `cruise-planner.html`: a self-contained single HTML file (no build step, n
 | Dunedin | 2027-01-07 | 11 | 12 |
 | Christchurch | 2027-01-08 | 10 | 11 |
 | Picton | 2027-01-09 | 8 | 8 |
-| Wellington | 2027-01-10 | 9 | 11 |
+| Wellington | 2027-01-10 | 9 | 10 |
 | Gisborne | 2027-01-11 | 8 | 10 |
 | Rotorua/Tauranga | 2027-01-12 | 16 | 16 |
 | Bay of Islands | 2027-01-13 | 14 | 16 |
-| **TOTAL** | | **88** | **109** |
+| **TOTAL** | | **88** | **108** |
 
 ## Sheets Schema
 
@@ -79,6 +79,7 @@ Sub-tasks:
 - [x] **2d** — syncFromSheets(): pull all Votes + Schedule + Requests, merge into STATE
 - [x] **2e** — 30s polling loop (startPolling/stopPolling, pause on visibilitychange)
 - [x] **2f** — Offline queue: buffer writes to localStorage, processQueue() on reconnect, sync badge
+- [x] **2g** — Extract `parseSheetsRows(votesRaw, schedRaw, reqRaw)` from syncFromSheets into core.js; 6 unit tests
 
 ### Phase 3 — Core Shell & Flow A (Name Selection)
 **Status:** `pending`
@@ -110,6 +111,7 @@ Sub-tasks:
 - [x] **4d** — Live group vote counts on each card (tallied from STATE.votes)
 - [x] **4e** — "Also available" teal banner for multi-offering excursions
 - [x] **4f** — Conflict warnings on cards: 🟡 potential (love vote on same day) / 🔴 confirmed (overlaps booked)
+- [x] **4g** — Extract `renderOfferingOptions(exc, selectedDate, selectedTime)` from card renderer into core.js; 4 unit tests
 
 ### Phase 5 — Group Dashboard (Flow C)
 **Status:** `pending`
@@ -170,10 +172,11 @@ Sub-tasks:
 - Offline queue: localStorage array of pending actions; retry on reconnect; "⏳ Pending sync" badge
 
 Sub-tasks:
-- [x] **8a** — getConflictsForPerson(person, date): returns array of overlapping {a, b} schedule entry pairs
+- [x] **8a** — getConflictsForPerson(person, date): returns array of overlapping {a, b} schedule entry pairs; 6 unit tests
 - [x] **8b** — Wire conflict detection into vote card render (Phase 4f) and schedule render (Phase 6c)
 - [x] **8c** — Wire conflict pre-check into Lock modal (Phase 5d): block submit if conflicts found
 - [x] **8d** — processQueue(): replay pending offline actions; show "⏳ Pending sync" badge in header when queue non-empty
+- [x] **8e** — conflictLevelForExcursion(exc, person): returns 'confirmed' | 'potential' | null; 5 unit tests
 
 ### Phase 9 — Polish & Deliverables
 **Status:** `pending`
