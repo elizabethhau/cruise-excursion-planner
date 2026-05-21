@@ -223,6 +223,23 @@ Toggle-to-undo logic already existed in `handleVote` (line 2388) but only cleare
 Sub-tasks:
 - [x] **11a** — `handleVote` undo branch: add `await castVote(code, '', null, null)` + `showToast('Vote removed')`
 
+### Phase 12 — Activity Levels + Descriptions from Excel
+**Status:** `complete`
+
+Decisions (from grill-me session 2026-05-20):
+- Activity level mapping: Moderate→moderate, Light→light, Strenuous→strenuous, Seated Tour→light
+- Description: replace existing field with FULL Excel description (narrative + bullets + disclaimer)
+- WLG-006 (only entry without bullets): use Excel narrative paragraph
+- WLG-009 and BAY-011 have double-quotes in descriptions — must escape as `\"`
+- Newlines in descriptions: stored as `\n` escape sequences in JS string; render with `white-space: pre-wrap` on `.exc-desc`
+- `_review_activity: true` flag: removed from all 88 entries after update
+
+Sub-tasks:
+- [x] **12a** — Write update script: reads Excel → builds {code: activity_level, description} dict
+- [x] **12b** — Process data.js line by line: update activity_level, remove _review_activity, replace description
+- [x] **12c** — Add `white-space: pre-wrap` to `.exc-desc` in styles.css
+- [x] **12d** — Verify: node tests.js passes; grep confirms 0 `_review_activity` remaining; count 88 descriptions updated
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|

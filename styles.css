@@ -486,6 +486,7 @@ img { display: block; max-width: 100%; }
   color: var(--gray-500);
   line-height: 1.5;
   margin-bottom: 10px;
+  white-space: pre-wrap;
 }
 .exc-meta {
   display: flex;

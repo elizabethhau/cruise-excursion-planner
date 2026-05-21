@@ -62,6 +62,22 @@
 - [ ] Extract + test sync pipeline: `fetchSheetsData`, `parseSheetsData`, `applySyncResult` (currently one monolithic block in app.js)
 - [ ] Extract + test offering selector rendering: `renderOfferingOptions` (currently inline in the card renderer)
 
+## Session 4 — 2026-05-20
+
+### Completed
+- [x] Phase 12: Updated all 88 excursion activity levels from Excel (Moderate→moderate, Light→light, Strenuous→strenuous, Seated Tour→light)
+- [x] Replaced all 88 descriptions with full Excel descriptions (narrative + bullets + disclaimer)
+- [x] Removed `_review_activity: true` flag from all 88 entries
+- [x] Added `white-space: pre-wrap` to `.exc-desc` so bullet points render on separate lines
+- [x] Fixed re.sub `\n`-in-replacement bug (used direct line construction instead)
+- [x] WLG-009 and BAY-011 double-quotes properly escaped as `\"`
+
+### Verification
+- `node tests.js`: 7/7 passed
+- `_review_activity` remaining: 0
+- Description lines: 88 (all single-line, no unterminated strings)
+- Activity level counts: light=18, moderate=56, strenuous=14 (total 88)
+
 ## Test Results
 | Phase | Test | Result |
 |---|---|---|
