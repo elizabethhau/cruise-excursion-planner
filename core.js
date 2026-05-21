@@ -118,6 +118,50 @@ export function summarizeVotes(votesByPerson, offerings) {
 }
 
 /* ─────────────────────────────────────────────────
+   SHEETS DATA PARSING
+───────────────────────────────────────────────── */
+export function parseSheetsRows(votesRaw, schedRaw, reqRaw) {
+  const votes = {};
+  if (votesRaw) {
+    for (const [, person, code, vote, offering_date = '', offering_time = ''] of votesRaw) {
+      if (!code) continue;
+      if (!votes[code]) votes[code] = {};
+      votes[code][person] = { vote, offering_date: offering_date || null, offering_time: offering_time || null };
+    }
+  }
+  const schedule = schedRaw
+    ? schedRaw.map(([, personName, tourCode, date, departure_time, status]) =>
+        ({ personName, tourCode, date, departure_time, status }))
+    : [];
+  const requests = reqRaw
+    ? reqRaw.map(([ts, requesterName, tourCode, date, departure_time, note]) =>
+        ({ requesterName, tourCode, date, departure_time, note, timestamp: ts }))
+    : [];
+  return { votes, schedule, requests };
+}
+
+/* ─────────────────────────────────────────────────
+   OFFERING OPTIONS RENDERING
+───────────────────────────────────────────────── */
+export function renderOfferingOptions(exc, selectedDate, selectedTime) {
+  if (exc.offerings.length > 1) {
+    const radios = exc.offerings.map((o, i) => {
+      const checked = selectedDate === o.date && selectedTime === o.departure_time ? 'checked' : '';
+      return `<label class="offering-radio-label">
+        <input type="radio" name="offering-${exc.code}" value="${i}" ${checked}>
+        <span>${fmtDate(o.date)} · ${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
+      </label>`;
+    }).join('');
+    return `<div class="offering-selector"><div class="offering-selector-label">📅 Select your date/time</div>${radios}</div>`;
+  }
+  const o = exc.offerings[0];
+  return `<div class="exc-offerings"><div class="exc-offering-row">
+    <span class="offering-date">${fmtDate(o.date)}</span>
+    <span class="offering-time">${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
+  </div></div>`;
+}
+
+/* ─────────────────────────────────────────────────
    CONFLICT ENGINE
 ───────────────────────────────────────────────── */
 export function getMyScheduleEntries(person, date) {

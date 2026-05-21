@@ -5,6 +5,7 @@ import {
   portCompletionForPerson, portCompletionStatus, portStatusEmoji,
   voteOf, findExcursion, summarizeVotes,
   getMyScheduleEntries, getConflictsForPerson, conflictLevelForExcursion,
+  parseSheetsRows, renderOfferingOptions,
 } from './core.js';
 
 /* ─────────────────────────────────────────────────
@@ -302,22 +303,10 @@ async function syncFromSheets() {
       sheetsGet('Requests!A2:F'),
     ]);
 
-    if (votesRaw) {
-      STATE.votes = {};
-      for (const [ts, person, code, vote, offering_date='', offering_time=''] of votesRaw) {
-        if (!code) continue;
-        if (!STATE.votes[code]) STATE.votes[code] = {};
-        STATE.votes[code][person] = { vote, offering_date: offering_date||null, offering_time: offering_time||null };
-      }
-    }
-    if (schedRaw) {
-      STATE.schedule = schedRaw.map(([ts,personName,tourCode,date,departure_time,status]) =>
-        ({personName, tourCode, date, departure_time, status}));
-    }
-    if (reqRaw) {
-      STATE.requests = reqRaw.map(([ts,requesterName,tourCode,date,departure_time,note]) =>
-        ({requesterName, tourCode, date, departure_time, note, timestamp:ts}));
-    }
+    const parsed = parseSheetsRows(votesRaw, schedRaw, reqRaw);
+    if (votesRaw) STATE.votes    = parsed.votes;
+    if (schedRaw) STATE.schedule = parsed.schedule;
+    if (reqRaw)   STATE.requests = parsed.requests;
     STATE.lastSync = new Date();
     updateSyncBadge('ok');
     renderCurrentTab();
@@ -509,23 +498,7 @@ function buildExcursionCard(exc) {
     conflictHTML = `<div class="conflict-warn potential">🟡 Potential conflict with another love vote</div>`;
   }
 
-  let offeringsSection = '';
-  if (exc.offerings.length > 1) {
-    const radios = exc.offerings.map((o, i) => {
-      const selected = myOfferingDate === o.date && myOfferingTime === o.departure_time;
-      return `<label class="offering-radio-label">
-        <input type="radio" name="offering-${exc.code}" value="${i}" ${selected ? 'checked' : ''}>
-        <span>${fmtDate(o.date)} · ${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
-      </label>`;
-    }).join('');
-    offeringsSection = `<div class="offering-selector"><div class="offering-selector-label">📅 Select your date/time</div>${radios}</div>`;
-  } else {
-    offeringsSection = `<div class="exc-offerings">${exc.offerings.map(o => `
-      <div class="exc-offering-row">
-        <span class="offering-date">${fmtDate(o.date)}</span>
-        <span class="offering-time">${formatTime(o.departure_time)} – ${endTimeStr(o.departure_time, exc.duration_hrs)}</span>
-      </div>`).join('')}</div>`;
-  }
+  const offeringsSection = renderOfferingOptions(exc, myOfferingDate, myOfferingTime);
 
   const needsNudge = exc.offerings.length > 1 && (myVote === 'love' || myVote === 'interested') && !myOfferingDate;
   const nudgeHTML = needsNudge ? `<div class="offering-nudge">👆 Pick a date/time above to complete your vote</div>` : '';
