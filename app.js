@@ -441,19 +441,9 @@ async function submitRequest(tourCode, date, departure_time, note) {
 function renderVoteTab() {
   const el = document.getElementById('screen-vote');
 
-  // Preserve existing nav element so its scrollLeft survives the re-render
-  const existingNav = document.getElementById('port-nav');
-  el.innerHTML = '';
-
-  let nav;
-  if (existingNav) {
-    existingNav.querySelectorAll('.port-pill').forEach((btn, idx) => {
-      const status = portCompletionStatus(idx);
-      btn.className = `port-pill ${status}${idx === STATE.portIndex ? ' active' : ''}`;
-      btn.textContent = `${portStatusEmoji(status)} ${EXCURSION_DATA.ports[idx].name.split('/')[0]}`;
-    });
-    nav = existingNav;
-  } else {
+  // Create nav only on first render — never remove it, so scrollLeft is preserved
+  let nav = document.getElementById('port-nav');
+  if (!nav) {
     nav = document.createElement('div');
     nav.id = 'port-nav';
     EXCURSION_DATA.ports.forEach((port, idx) => {
@@ -465,8 +455,17 @@ function renderVoteTab() {
       btn.onclick = () => { STATE.portIndex = idx; renderVoteTab(); };
       nav.appendChild(btn);
     });
+    el.appendChild(nav);
+  } else {
+    nav.querySelectorAll('.port-pill').forEach((btn, idx) => {
+      const status = portCompletionStatus(idx);
+      btn.className = `port-pill ${status}${idx === STATE.portIndex ? ' active' : ''}`;
+      btn.textContent = `${portStatusEmoji(status)} ${EXCURSION_DATA.ports[idx].name.split('/')[0]}`;
+    });
   }
-  el.appendChild(nav);
+
+  // Remove only the content below the nav (port header + cards)
+  while (el.lastChild !== nav) el.removeChild(el.lastChild);
 
   const port = EXCURSION_DATA.ports[STATE.portIndex];
 

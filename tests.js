@@ -374,6 +374,28 @@ console.log('\nDOM: port nav scroll preservation');
     assert.ok(pills[3].classList.contains('active'), 'pill 3 should be active');
     assert.ok(!pills[0].classList.contains('active'), 'pill 0 should not be active');
   });
+
+  await (async () => {
+    let navWasRemoved = false;
+    STATE.portIndex = 0;
+    w.renderVoteTab();
+    const nav = w.document.getElementById('port-nav');
+    const observer = new w.MutationObserver(mutations => {
+      for (const m of mutations) {
+        for (const node of m.removedNodes) {
+          if (node === nav) navWasRemoved = true;
+        }
+      }
+    });
+    observer.observe(w.document.getElementById('screen-vote'), { childList: true });
+    STATE.portIndex = 5;
+    w.renderVoteTab();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    observer.disconnect();
+    it('#port-nav is never detached from DOM during re-render', () => {
+      assert.ok(!navWasRemoved, '#port-nav must not be removed from its parent during re-render');
+    });
+  })();
 }
 
 /* ─────────────────────────────────────────────────
