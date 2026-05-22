@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { JSDOM } from 'jsdom';
 import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions } from './core.js';
 import { STATE } from './state.js';
 
@@ -330,6 +332,49 @@ it('multi-offering with no selection → no radio checked', () => {
   const html = renderOfferingOptions(exc, null, null);
   assert.ok(!html.includes('checked'), 'no radio should be checked');
 });
+
+/* ─────────────────────────────────────────────────
+   DOM: port nav scroll preservation (jsdom)
+───────────────────────────────────────────────── */
+console.log('\nDOM: port nav scroll preservation');
+
+{
+  const html = readFileSync(new URL('./cruise-planner.html', import.meta.url), 'utf8');
+  const dom = new JSDOM(html, { url: 'http://localhost' });
+  const { window: w } = dom;
+
+  global.window        = w;
+  global.document      = w.document;
+  global.localStorage  = w.localStorage;
+  global.sessionStorage = w.sessionStorage;
+  global.navigator     = w.navigator;
+  global.fetch         = async () => ({ ok: false });
+
+  await import('./app.js');
+
+  it('#port-nav element identity preserved across renderVoteTab calls', () => {
+    STATE.portIndex = 0;
+    w.renderVoteTab();
+    const nav1 = w.document.getElementById('port-nav');
+    assert.ok(nav1, 'nav exists after first render');
+
+    STATE.portIndex = 5;
+    w.renderVoteTab();
+    const nav2 = w.document.getElementById('port-nav');
+    assert.strictEqual(nav1, nav2, '#port-nav must be the same DOM node after re-render');
+  });
+
+  it('active pill class updates to reflect new portIndex', () => {
+    STATE.portIndex = 0;
+    w.renderVoteTab();
+    STATE.portIndex = 3;
+    w.renderVoteTab();
+    const nav = w.document.getElementById('port-nav');
+    const pills = nav.querySelectorAll('.port-pill');
+    assert.ok(pills[3].classList.contains('active'), 'pill 3 should be active');
+    assert.ok(!pills[0].classList.contains('active'), 'pill 0 should not be active');
+  });
+}
 
 /* ─────────────────────────────────────────────────
    RESULTS

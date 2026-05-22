@@ -440,19 +440,32 @@ async function submitRequest(tourCode, date, departure_time, note) {
 ───────────────────────────────────────────────── */
 function renderVoteTab() {
   const el = document.getElementById('screen-vote');
+
+  // Preserve existing nav element so its scrollLeft survives the re-render
+  const existingNav = document.getElementById('port-nav');
   el.innerHTML = '';
 
-  const nav = document.createElement('div');
-  nav.id = 'port-nav';
-  EXCURSION_DATA.ports.forEach((port, idx) => {
-    const status = portCompletionStatus(idx);
-    const emoji  = portStatusEmoji(status);
-    const btn = document.createElement('button');
-    btn.className = `port-pill ${status}${idx === STATE.portIndex ? ' active' : ''}`;
-    btn.textContent = `${emoji} ${port.name.split('/')[0]}`;
-    btn.onclick = () => { STATE.portIndex = idx; renderVoteTab(); };
-    nav.appendChild(btn);
-  });
+  let nav;
+  if (existingNav) {
+    existingNav.querySelectorAll('.port-pill').forEach((btn, idx) => {
+      const status = portCompletionStatus(idx);
+      btn.className = `port-pill ${status}${idx === STATE.portIndex ? ' active' : ''}`;
+      btn.textContent = `${portStatusEmoji(status)} ${EXCURSION_DATA.ports[idx].name.split('/')[0]}`;
+    });
+    nav = existingNav;
+  } else {
+    nav = document.createElement('div');
+    nav.id = 'port-nav';
+    EXCURSION_DATA.ports.forEach((port, idx) => {
+      const status = portCompletionStatus(idx);
+      const emoji  = portStatusEmoji(status);
+      const btn = document.createElement('button');
+      btn.className = `port-pill ${status}${idx === STATE.portIndex ? ' active' : ''}`;
+      btn.textContent = `${emoji} ${port.name.split('/')[0]}`;
+      btn.onclick = () => { STATE.portIndex = idx; renderVoteTab(); };
+      nav.appendChild(btn);
+    });
+  }
   el.appendChild(nav);
 
   const port = EXCURSION_DATA.ports[STATE.portIndex];
@@ -1151,6 +1164,7 @@ document.getElementById('modal-generic').addEventListener('click', function(e) {
    GLOBAL EXPORTS (for inline onclick handlers in dynamic HTML)
 ───────────────────────────────────────────────── */
 Object.assign(window, {
+  renderVoteTab,
   handleVote,
   openLockModal, confirmLock, closeGenericModal,
   openRequestModal, confirmRequest,

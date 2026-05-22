@@ -243,6 +243,21 @@ Sub-tasks:
 - [x] **12c** — Add `white-space: pre-wrap` to `.exc-desc` in styles.css
 - [x] **12d** — Verify: node tests.js passes; grep confirms 0 `_review_activity` remaining; count 88 descriptions updated
 
+### Phase 13 — Port Nav Scroll Preservation
+**Status:** `complete`
+
+Clicking a port pill beyond the first four causes the nav row to jump back to the start. Root cause: `renderVoteTab()` calls `el.innerHTML = ''` which destroys `#port-nav` and recreates it fresh (scrollLeft = 0). Fix: save the existing nav reference before wipe, re-use it (updating pill classes in-place) on subsequent renders.
+
+**Decisions (from grill-me session 2026-05-21):**
+- Option C: skip nav re-render entirely — preserve the existing `#port-nav` DOM element reference across `renderVoteTab()` calls. Scroll position preserved as a natural consequence of element identity.
+- Add jsdom (dev dependency) + write tests that verify `#port-nav` element identity is preserved and active pill class is updated correctly.
+
+Sub-tasks:
+- [x] **13a** — Add jsdom dev dependency (package.json + npm install)
+- [x] **13b** — Write RED jsdom tests: nav element identity preserved + active pill updates
+- [x] **13c** — Fix `renderVoteTab` to re-use existing nav; expose `renderVoteTab` via window for testing
+- [ ] **13d** — Confirm GREEN; browser smoke test
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|
