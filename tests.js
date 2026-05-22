@@ -214,6 +214,15 @@ it('love vote with no overlapping same-day love votes → null', () => {
   assert.equal(conflictLevelForExcursion(findExcursion('MEB-006'), 'Elizabeth'), null);
 });
 
+it('love vote with specific offering chosen: only that date checked for potential conflicts', () => {
+  resetState();
+  // Person chose MEB-006 Jan 1; MEB-019 only runs Dec 31 → no overlap on Jan 1 → null
+  // Without the fix this returns 'potential' because it checks all MEB-006 offerings including Dec 31
+  STATE.votes['MEB-006'] = { Elizabeth: { vote: 'love', offering_date: '2027-01-01', offering_time: '09:00' } };
+  STATE.votes['MEB-019'] = { Elizabeth: { vote: 'love', offering_date: '2026-12-31', offering_time: '10:00' } };
+  assert.equal(conflictLevelForExcursion(findExcursion('MEB-006'), 'Elizabeth'), null);
+});
+
 /* ─────────────────────────────────────────────────
    parseSheetsRows
 ───────────────────────────────────────────────── */
@@ -265,6 +274,16 @@ it('schedule rows → array of correctly-shaped objects', () => {
   });
 });
 
+it('schedule: later row for same (person, tourCode, date) overwrites earlier', () => {
+  const rows = [
+    ['ts1', 'Elizabeth', 'MEB-006', '2026-12-31', '09:00', 'booked'],
+    ['ts2', 'Elizabeth', 'MEB-006', '2026-12-31', '09:00', 'dropped'],
+  ];
+  const r = parseSheetsRows(null, rows, null);
+  assert.equal(r.schedule.length, 1);
+  assert.equal(r.schedule[0].status, 'dropped');
+});
+
 it('requests rows → array with requesterName and timestamp', () => {
   const rows = [
     ['ts1', 'Dad', 'MEB-001', '2026-12-31', '08:30', 'Please book 2 spots'],
@@ -303,7 +322,7 @@ it('multi-offering with matching selection → that radio is checked', () => {
   // Only one radio should be checked
   assert.equal((html.match(/checked/g) || []).length, 1);
   // The checked radio should be the one for 2027-01-01 09:00 (index 1)
-  assert.ok(html.includes('value="1" checked') || html.includes('value="1"  checked'));
+  assert.ok(html.includes('value="1" checked'));
 });
 
 it('multi-offering with no selection → no radio checked', () => {

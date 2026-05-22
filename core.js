@@ -129,10 +129,13 @@ export function parseSheetsRows(votesRaw, schedRaw, reqRaw) {
       votes[code][person] = { vote, offering_date: offering_date || null, offering_time: offering_time || null };
     }
   }
-  const schedule = schedRaw
-    ? schedRaw.map(([, personName, tourCode, date, departure_time, status]) =>
-        ({ personName, tourCode, date, departure_time, status }))
-    : [];
+  const schedMap = {};
+  if (schedRaw) {
+    for (const [, personName, tourCode, date, departure_time, status] of schedRaw) {
+      schedMap[`${personName}|${tourCode}|${date}`] = { personName, tourCode, date, departure_time, status };
+    }
+  }
+  const schedule = Object.values(schedMap);
   const requests = reqRaw
     ? reqRaw.map(([ts, requesterName, tourCode, date, departure_time, note]) =>
         ({ requesterName, tourCode, date, departure_time, note, timestamp: ts }))
@@ -205,7 +208,11 @@ export function conflictLevelForExcursion(exc, person) {
   }
   // Check love-vote potential conflicts
   if (voteOf(exc.code, person) === 'love') {
-    for (const off of exc.offerings) {
+    const myVotedDate = ((STATE.votes[exc.code] || {})[person] || {}).offering_date;
+    const offeringsToCheck = myVotedDate
+      ? exc.offerings.filter(o => o.date === myVotedDate)
+      : exc.offerings;
+    for (const off of offeringsToCheck) {
       for (const code2 of Object.keys(STATE.votes)) {
         if (code2 === exc.code) continue;
         if (voteOf(code2, person) !== 'love') continue;
