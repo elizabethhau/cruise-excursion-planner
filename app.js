@@ -676,7 +676,12 @@ function jumpToExcursion(code) {
   STATE.portIndex = EXCURSION_DATA.ports.indexOf(port);
   switchTab('vote');
   const el = document.getElementById('exc-' + code);
-  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!el) return;
+  const content = document.getElementById('content');
+  const nav = document.getElementById('port-nav');
+  const navH = nav ? nav.offsetHeight : 0;
+  const elTop = el.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+  content.scrollTo({ top: elTop - navH, behavior: 'smooth' });
 }
 
 /* ─────────────────────────────────────────────────
