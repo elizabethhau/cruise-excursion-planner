@@ -192,6 +192,89 @@ export function getConflictsForPerson(person, date) {
   return conflicts;
 }
 
+/* ─────────────────────────────────────────────────
+   SCHEDULE ITEMS (booked + wishlist unified)
+───────────────────────────────────────────────── */
+export function buildScheduleItems(person) {
+  const bookedEntries = STATE.schedule.filter(s =>
+    s.personName === person && s.status === 'booked'
+  );
+  const bookedCodes = new Set(bookedEntries.map(e => e.tourCode));
+  const items = [];
+
+  for (const entry of bookedEntries) {
+    const exc = findExcursion(entry.tourCode);
+    if (!exc) continue;
+    items.push({ type: 'booked', tourCode: entry.tourCode, date: entry.date, departure_time: entry.departure_time, exc });
+  }
+
+  for (const [code, byPerson] of Object.entries(STATE.votes)) {
+    const vObj = byPerson[person];
+    if (!vObj || !['love', 'interested'].includes(vObj.vote)) continue;
+    if (bookedCodes.has(code)) continue;
+    const exc = findExcursion(code);
+    if (!exc) continue;
+    let date = vObj.offering_date;
+    let departure_time = vObj.offering_time || null;
+    if (!date) {
+      const port = findPortForCode(code);
+      date = port ? port.dates[0] : null;
+      departure_time = null;
+    }
+    if (!date) continue;
+    items.push({ type: 'wishlist', tourCode: code, date, departure_time, exc, voteType: vObj.vote });
+  }
+
+  items.sort((a, b) => {
+    if (a.date !== b.date) return a.date < b.date ? -1 : 1;
+    if (!a.departure_time && !b.departure_time) return 0;
+    if (!a.departure_time) return 1;
+    if (!b.departure_time) return -1;
+    return toMins(a.departure_time) - toMins(b.departure_time);
+  });
+
+  return items;
+}
+
+/* ─────────────────────────────────────────────────
+   FEES CALCULATION
+───────────────────────────────────────────────── */
+export function calcPersonFees(person) {
+  const bookedCodes = new Set(
+    STATE.schedule
+      .filter(s => s.personName === person && s.status === 'booked')
+      .map(s => s.tourCode)
+  );
+
+  const confirmedList = [];
+  for (const code of bookedCodes) {
+    const exc = findExcursion(code);
+    if (!exc || exc.price_usd === 0) continue;
+    confirmedList.push({ code, name: exc.name, price: exc.price_usd });
+  }
+
+  const potentialList = [];
+  for (const [code, byPerson] of Object.entries(STATE.votes)) {
+    const vObj = byPerson[person];
+    if (!vObj || vObj.vote !== 'love') continue;
+    if (bookedCodes.has(code)) continue;
+    const exc = findExcursion(code);
+    if (!exc || exc.price_usd === 0) continue;
+    potentialList.push({ code, name: exc.name, price: exc.price_usd });
+  }
+
+  const confirmed = confirmedList.reduce((s, e) => s + e.price, 0);
+  const potential = potentialList.reduce((s, e) => s + e.price, 0);
+  return { confirmed, potential, confirmedList, potentialList };
+}
+
+export function calcFamilyFees() {
+  const members = FAMILY.map(person => ({ person, ...calcPersonFees(person) }));
+  const totalConfirmed = members.reduce((s, m) => s + m.confirmed, 0);
+  const totalPotential = members.reduce((s, m) => s + m.potential, 0);
+  return { members, totalConfirmed, totalPotential };
+}
+
 export function conflictLevelForExcursion(exc, person) {
   // Check booked conflicts (confirmed)
   for (const off of exc.offerings) {

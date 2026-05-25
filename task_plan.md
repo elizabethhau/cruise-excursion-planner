@@ -17,6 +17,13 @@ Build `cruise-planner.html`: a self-contained single HTML file (no build step, n
 | Non-Elizabeth dashboard | Same view as Elizabeth; Lock controls + tappable badge breakdown + "Ports ready to book" + Requests inbox HIDDEN |
 | Voting requirement | At least 1 love/interested per port = "complete" (skip-only doesn't count) |
 | Melbourne date nav | Single scrollable card list; dates labeled per offering slot (no sub-tabs) |
+| Schedule tab filter | Toggle "All \| Confirmed only" — affects view and export |
+| Schedule wishlist placement | No offering_date → place under port's first offering date with "📅 Pick a date" nudge |
+| Schedule click-through | Tap wish-list card → jump to Vote tab, scroll to `#exc-{code}` |
+| Fees tab scope | Booked (confirmed) + love-not-booked (potential) as separate subtotals; $0 excluded |
+| Fees tab price field | price_usd only |
+| Fees tab nav | 5th tab for all users: Vote · Dashboard · Schedule · Fees · Settings |
+| Fees tab family view | Per-person accordion + expandable excursion list + grand total; toggle available to all (not Elizabeth-only) |
 
 ## Port / Date Summary (from PDF)
 
@@ -279,6 +286,47 @@ Sub-tasks:
 - [ ] **14b** — Implement `scheduleTokenRefresh(exp)` and `refreshToken()` in app.js; guard `initSheets()` call
 - [ ] **14c** — Wire startup: call `scheduleTokenRefresh` when token is restored from sessionStorage on load
 - [ ] **14d** — Confirm GREEN; manual smoke test in browser
+
+### Phase 15 — Schedule Tab Wishlist Expansion
+**Status:** `pending`
+
+Show love/interested excursions inline with booked ones so users can spot duplicate activity types across the trip at a glance.
+
+**Decisions (from grill-me session 2026-05-25):**
+- Wish-list items (love/interested, not booked) render in the same chronological flow as booked entries, visually differentiated (dashed border, muted background, "Unconfirmed" label)
+- If a wish-list excursion has `offering_date`/`offering_time` from voting, use that to place it; if not, place under the port's first offering date with a "📅 Pick a date" nudge
+- If an excursion is both booked and loved, show once as booked — mark it as ❤️ booked to surface the love signal without duplication
+- Wish-list card content: name, price, activity badge, vote indicator (❤️/🤔), full description, time range (if offering picked); no Drop button
+- Clicking a wish-list card navigates to the Vote tab, selects the correct port, and scrolls to that excursion card (excursion cards get `id="exc-{code}"`)
+- Tab-level toggle: "All | Confirmed only" — affects both view and export
+- Export includes wish-list items labeled "[Wishlist]"; "Confirmed only" export omits them
+
+Sub-tasks:
+- [x] **15a** — Extract `buildScheduleItems(person)` into core.js: collects booked entries + love/interested wish-list (deduped against booked, date assigned); returns unified sorted array with `{type: 'booked'|'wishlist', ...}`; write RED tests (empty, booked only, wishlist only, dedup booked+loved, no-offering fallback to first port date), then GREEN
+- [x] **15b** — Add `id="exc-{code}"` to each excursion card in `renderVoteTab()`; implement `jumpToExcursion(code)` in app.js (switch to vote tab, set `STATE.port`, re-render, `scrollIntoView`)
+- [x] **15c** — Add "All | Confirmed only" toggle to schedule tab header; persist selection in `STATE.scheduleFilter` (in-memory only, resets on tab switch is fine)
+- [x] **15d** — Update `renderScheduleTab()` to use `buildScheduleItems`, render wish-list cards with dashed-border style, vote indicator, full description, click-to-jump handler; apply `scheduleFilter`
+- [x] **15e** — Update `exportSchedule()` to include wish-list items labeled "[Wishlist]"; respect `scheduleFilter` toggle
+
+### Phase 16 — Fees Tab (Flow F)
+**Status:** `pending`
+
+New 5th tab showing excursion costs (paid only, $0 excluded). Personal view for everyone; family-wide view available via toggle.
+
+**Decisions (from grill-me session 2026-05-25):**
+- New "Fees" tab added to bottom nav: Vote · Dashboard · Schedule · Fees · Settings
+- Toggle on tab: "My costs | Family costs" — available to all users, not Elizabeth-only
+- Scope: booked (confirmed) + love-not-yet-booked (potential) shown as two separate subtotals
+- Price field: `price_usd` only; complimentary ($0) excursions excluded entirely
+- My costs view: confirmed subtotal + potential subtotal + flat list of each paid excursion with cost and status
+- Family costs view: per-person accordion rows showing name + confirmed + potential subtotals, expandable to show excursion list; grand total row at bottom summing all confirmed across all people
+
+Sub-tasks:
+- [x] **16a** — Extract `calcPersonFees(person)` into core.js: returns `{confirmed: number, potential: number, confirmedList: [{code, name, price}], potentialList: [{code, name, price}]}`; write RED tests (all complimentary→zeros, mix of booked/loved/skipped, dedup love-already-booked from potential), then GREEN
+- [x] **16b** — Extract `calcFamilyFees()` into core.js: calls `calcPersonFees` for each FAMILY member, returns `[{person, confirmed, potential, confirmedList, potentialList}]` + `{totalConfirmed, totalPotential}`; write RED tests (empty family, single person, grand total math), then GREEN
+- [x] **16c** — Add `fees` tab to bottom nav markup in `cruise-planner.html`; add `#screen-fees` div; wire `render()` router in app.js to call `renderFeesTab()`
+- [x] **16d** — Implement `renderFeesTab()` in app.js: "My costs | Family costs" toggle; personal view renders confirmed + potential subtotals + itemised list (excursion name + price + booked/love badge)
+- [x] **16e** — Family costs view in `renderFeesTab()`: per-person accordion rows (tap to expand/collapse excursion list), grand total footer row
 
 ## Errors Encountered
 | Error | Attempt | Resolution |

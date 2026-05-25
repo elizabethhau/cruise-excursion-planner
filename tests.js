@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions } from './core.js';
+import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions, buildScheduleItems, calcPersonFees, calcFamilyFees } from './core.js';
 import { STATE } from './state.js';
 
 function resetState() {
@@ -331,6 +331,215 @@ it('multi-offering with no selection → no radio checked', () => {
   const exc = findExcursion('MEB-006');
   const html = renderOfferingOptions(exc, null, null);
   assert.ok(!html.includes('checked'), 'no radio should be checked');
+});
+
+/* ─────────────────────────────────────────────────
+   buildScheduleItems
+   MEB-001: $239, single offering 2026-12-31 08:30
+   MEB-006: $0,   multi offering  2026-12-31 09:00 / 2027-01-01 09:00 / 11:00
+   HBA-013: port dates ['2027-01-03'], single offering 2027-01-03 10:00
+───────────────────────────────────────────────── */
+console.log('\nbuildScheduleItems');
+
+it('empty state → []', () => {
+  resetState();
+  assert.deepEqual(buildScheduleItems('Elizabeth'), []);
+});
+
+it('one booked entry → type:booked item with correct fields', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].type, 'booked');
+  assert.equal(items[0].tourCode, 'MEB-001');
+  assert.equal(items[0].date, '2026-12-31');
+  assert.equal(items[0].departure_time, '08:30');
+  assert.ok(items[0].exc, 'exc should be set');
+});
+
+it('dropped entry is excluded', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'dropped' },
+  ];
+  assert.equal(buildScheduleItems('Elizabeth').length, 0);
+});
+
+it('love vote with offering_date → type:wishlist item', () => {
+  resetState();
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'love', offering_date: '2026-12-31', offering_time: '08:30' } };
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].type, 'wishlist');
+  assert.equal(items[0].tourCode, 'MEB-001');
+  assert.equal(items[0].date, '2026-12-31');
+  assert.equal(items[0].departure_time, '08:30');
+  assert.equal(items[0].voteType, 'love');
+});
+
+it('interested vote → included as wishlist item', () => {
+  resetState();
+  STATE.votes['HBA-013'] = { Elizabeth: { vote: 'interested', offering_date: '2027-01-03', offering_time: '10:00' } };
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].voteType, 'interested');
+});
+
+it('skip vote → not included', () => {
+  resetState();
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'skip', offering_date: null, offering_time: null } };
+  assert.equal(buildScheduleItems('Elizabeth').length, 0);
+});
+
+it('love + booked same excursion → one item as type:booked (dedup)', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'love', offering_date: '2026-12-31', offering_time: '08:30' } };
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].type, 'booked');
+});
+
+it('love vote with no offering_date → fallback to port first date, departure_time null', () => {
+  resetState();
+  // HBA-013 port dates: ['2027-01-03']
+  STATE.votes['HBA-013'] = { Elizabeth: { vote: 'love', offering_date: null, offering_time: null } };
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 1);
+  assert.equal(items[0].date, '2027-01-03');
+  assert.equal(items[0].departure_time, null);
+});
+
+it('items sorted by date then departure_time; null departure_time sorts last within date', () => {
+  resetState();
+  // wishlist MEB-001 (2026-12-31, no time), booked MEB-006 (2026-12-31 09:00), wishlist HBA-013 (2027-01-03 10:00)
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-006', date: '2026-12-31', departure_time: '09:00', status: 'booked' },
+  ];
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'love', offering_date: null, offering_time: null } };
+  STATE.votes['HBA-013'] = { Elizabeth: { vote: 'love', offering_date: '2027-01-03', offering_time: '10:00' } };
+  const items = buildScheduleItems('Elizabeth');
+  assert.equal(items.length, 3);
+  assert.equal(items[0].tourCode, 'MEB-006'); // 2026-12-31 09:00
+  assert.equal(items[1].tourCode, 'MEB-001'); // 2026-12-31 null (fallback to Melbourne first date)
+  assert.equal(items[2].tourCode, 'HBA-013'); // 2027-01-03 10:00
+});
+
+/* ─────────────────────────────────────────────────
+   calcPersonFees
+   MEB-001: price_usd=239  (paid)
+   MEB-006: price_usd=0    (complimentary)
+───────────────────────────────────────────────── */
+console.log('\ncalcPersonFees');
+
+it('no bookings, no votes → zeros and empty lists', () => {
+  resetState();
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.confirmed, 0);
+  assert.equal(r.potential, 0);
+  assert.deepEqual(r.confirmedList, []);
+  assert.deepEqual(r.potentialList, []);
+});
+
+it('booked complimentary excursion → not counted', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-006', date: '2026-12-31', departure_time: '09:00', status: 'booked' },
+  ];
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.confirmed, 0);
+  assert.deepEqual(r.confirmedList, []);
+});
+
+it('booked paid excursion → in confirmedList and confirmed total', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.confirmed, 239);
+  assert.equal(r.confirmedList.length, 1);
+  assert.equal(r.confirmedList[0].code, 'MEB-001');
+  assert.equal(r.confirmedList[0].price, 239);
+});
+
+it('love vote on paid excursion (not booked) → in potentialList', () => {
+  resetState();
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'love', offering_date: '2026-12-31', offering_time: '08:30' } };
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.potential, 239);
+  assert.equal(r.potentialList.length, 1);
+  assert.equal(r.potentialList[0].code, 'MEB-001');
+});
+
+it('interested vote (not love) → not in potential', () => {
+  resetState();
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'interested', offering_date: '2026-12-31', offering_time: '08:30' } };
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.potential, 0);
+  assert.deepEqual(r.potentialList, []);
+});
+
+it('love + booked same excursion → confirmed only, not in potential', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  STATE.votes['MEB-001'] = { Elizabeth: { vote: 'love', offering_date: '2026-12-31', offering_time: '08:30' } };
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.confirmed, 239);
+  assert.equal(r.potential, 0);
+  assert.equal(r.confirmedList.length, 1);
+  assert.deepEqual(r.potentialList, []);
+});
+
+it('dropped booking excluded from confirmed', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'dropped' },
+  ];
+  const r = calcPersonFees('Elizabeth');
+  assert.equal(r.confirmed, 0);
+});
+
+/* ─────────────────────────────────────────────────
+   calcFamilyFees
+───────────────────────────────────────────────── */
+console.log('\ncalcFamilyFees');
+
+it('no bookings/votes → totalConfirmed/totalPotential 0, one entry per family member', () => {
+  resetState();
+  const r = calcFamilyFees();
+  assert.equal(r.totalConfirmed, 0);
+  assert.equal(r.totalPotential, 0);
+  assert.equal(r.members.length, 7); // Dad, Mom, Elizabeth, Abby, Jonathan, Luke, James
+});
+
+it('one person booked paid excursion → totalConfirmed reflects it', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Dad', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  const r = calcFamilyFees();
+  assert.equal(r.totalConfirmed, 239);
+  assert.equal(r.totalPotential, 0);
+  const dad = r.members.find(m => m.person === 'Dad');
+  assert.equal(dad.confirmed, 239);
+});
+
+it('two people each with a booking → totalConfirmed is sum', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Dad',       tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+    { personName: 'Elizabeth', tourCode: 'MEB-001', date: '2026-12-31', departure_time: '08:30', status: 'booked' },
+  ];
+  const r = calcFamilyFees();
+  assert.equal(r.totalConfirmed, 478); // 239 × 2
 });
 
 /* ─────────────────────────────────────────────────

@@ -3,9 +3,10 @@ import { EXCURSION_DATA, FAMILY, SHEET_NAMES, SHEET_HEADERS } from './data.js';
 import {
   toMins, formatTime, endTimeStr, fmtDate, fmtDateLong, fmtPrice, activityBadge, overlaps,
   portCompletionForPerson, portCompletionStatus, portStatusEmoji,
-  voteOf, findExcursion, summarizeVotes,
+  voteOf, findExcursion, findPortForCode, summarizeVotes,
   getMyScheduleEntries, getConflictsForPerson, conflictLevelForExcursion,
   parseSheetsRows, renderOfferingOptions,
+  buildScheduleItems, calcPersonFees, calcFamilyFees,
 } from './core.js';
 
 /* ─────────────────────────────────────────────────
@@ -35,6 +36,7 @@ function renderCurrentTab() {
   if (STATE.tab === 'vote')         renderVoteTab();
   else if (STATE.tab === 'dash')     renderDashTab();
   else if (STATE.tab === 'schedule') renderScheduleTab();
+  else if (STATE.tab === 'fees')     renderFeesTab();
   else if (STATE.tab === 'settings') renderSettingsTab();
 }
 
@@ -541,7 +543,7 @@ function buildExcursionCard(exc) {
 
   const card = document.createElement('div');
   card.className = 'excursion-card card';
-  card.id = `card-${exc.code}`;
+  card.id = `exc-${exc.code}`;
 
   let conflictHTML = '';
   if (conflictLevel === 'confirmed') {
@@ -652,7 +654,7 @@ async function handleVote(code, vote) {
   }
 
   const exc = findExcursion(code);
-  const oldCard = document.getElementById(`card-${code}`);
+  const oldCard = document.getElementById(`exc-${code}`);
   if (oldCard && exc) {
     const newCard = buildExcursionCard(exc);
     oldCard.replaceWith(newCard);
@@ -666,6 +668,15 @@ async function handleVote(code, vote) {
       btn.textContent = `${portStatusEmoji(status)} ${EXCURSION_DATA.ports[idx].name.split('/')[0]}`;
     });
   }
+}
+
+function jumpToExcursion(code) {
+  const port = findPortForCode(code);
+  if (!port) return;
+  STATE.portIndex = EXCURSION_DATA.ports.indexOf(port);
+  switchTab('vote');
+  const el = document.getElementById('exc-' + code);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ─────────────────────────────────────────────────
@@ -952,45 +963,44 @@ function renderScheduleTab() {
   const el = document.getElementById('screen-schedule');
   el.innerHTML = '';
 
-  const myEntries = STATE.schedule.filter(s =>
-    s.personName === STATE.user && s.status === 'booked'
-  );
+  const hdr = document.createElement('div');
+  hdr.className = 'tab-section-header';
+  hdr.innerHTML = `<div class="toggle-group">
+    <button class="toggle-btn ${STATE.scheduleFilter==='all'?'active':''}" onclick="toggleScheduleFilter('all')">All</button>
+    <button class="toggle-btn ${STATE.scheduleFilter==='confirmed'?'active':''}" onclick="toggleScheduleFilter('confirmed')">Confirmed only</button>
+  </div>`;
+  el.appendChild(hdr);
 
-  if (myEntries.length === 0) {
-    el.innerHTML = `
-      <div class="schedule-empty">
-        <div class="schedule-empty-icon">🗺️</div>
-        <div class="schedule-empty-text">No excursions booked yet.<br>Vote on your favourites and Elizabeth will lock them in!</div>
-      </div>
-    `;
+  const allItems = buildScheduleItems(STATE.user);
+  const items = STATE.scheduleFilter === 'confirmed' ? allItems.filter(i => i.type === 'booked') : allItems;
+
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'schedule-empty';
+    empty.innerHTML = `<div class="schedule-empty-icon">🗺️</div><div class="schedule-empty-text">No excursions booked yet.<br>Vote on your favourites and Elizabeth will lock them in!</div>`;
+    el.appendChild(empty);
     return;
   }
 
   const byDate = {};
-  myEntries.forEach(e => {
-    if (!byDate[e.date]) byDate[e.date] = [];
-    byDate[e.date].push(e);
-  });
+  for (const item of items) {
+    if (!byDate[item.date]) byDate[item.date] = [];
+    byDate[item.date].push(item);
+  }
 
-  const allDates = [...new Set(
-    EXCURSION_DATA.ports.flatMap(p => p.dates)
-  )].sort();
-
+  const allDates = [...new Set(EXCURSION_DATA.ports.flatMap(p => p.dates))].sort();
   const exportLines = ['CRUISE EXCURSION SCHEDULE — ' + (STATE.user || 'My Schedule'), ''];
 
   allDates.forEach(date => {
     if (!byDate[date]) return;
-    const entries = byDate[date].sort((a,b) => toMins(a.departure_time) - toMins(b.departure_time));
+    const dayItems = byDate[date];
     const port = EXCURSION_DATA.ports.find(p => p.dates.includes(date));
     const portName = port ? port.name : '';
 
-    const hdr = document.createElement('div');
-    hdr.className = 'schedule-day-header';
-    hdr.innerHTML = `
-      <div class="schedule-day-title">${portName}</div>
-      <div class="schedule-day-date">${fmtDateLong(date)}</div>
-    `;
-    el.appendChild(hdr);
+    const dayHdr = document.createElement('div');
+    dayHdr.className = 'schedule-day-header';
+    dayHdr.innerHTML = `<div class="schedule-day-title">${portName}</div><div class="schedule-day-date">${fmtDateLong(date)}</div>`;
+    el.appendChild(dayHdr);
 
     const conflicts = getConflictsForPerson(STATE.user, date);
     if (conflicts.length > 0) {
@@ -1003,43 +1013,57 @@ function renderScheduleTab() {
     exportLines.push(`── ${portName} · ${fmtDateLong(date)} ──`);
 
     let prevEndMins = null;
-    entries.forEach(entry => {
-      const exc = findExcursion(entry.tourCode);
-      if (!exc) return;
-
-      const startMins = toMins(entry.departure_time);
-      const endMins   = startMins + Math.round(exc.duration_hrs * 60);
-
-      if (prevEndMins !== null && startMins > prevEndMins) {
-        const gapMins = startMins - prevEndMins;
-        const gapEl = document.createElement('div');
-        gapEl.className = 'gap-label';
-        gapEl.textContent = `${gapMins} min free`;
-        el.appendChild(gapEl);
-      }
-
-      const row = document.createElement('div');
-      row.className = 'schedule-entry';
-      row.innerHTML = `
-        <div class="schedule-time">
-          ${formatTime(entry.departure_time)}<br>
-          <span style="color:var(--gray-400);">to ${endTimeStr(entry.departure_time, exc.duration_hrs)}</span>
-        </div>
-        <div class="schedule-entry-body">
-          <div class="schedule-entry-name">${exc.name}</div>
-          <div class="schedule-entry-meta">
-            ${exc.price_usd===0?'Complimentary':'$'+exc.price_usd} ·
-            ${activityBadge(exc.activity_level)}
+    for (const item of dayItems) {
+      const exc = item.exc;
+      if (item.type === 'booked') {
+        const startMins = toMins(item.departure_time);
+        const endMins   = startMins + Math.round(exc.duration_hrs * 60);
+        if (prevEndMins !== null && startMins > prevEndMins) {
+          const gapEl = document.createElement('div');
+          gapEl.className = 'gap-label';
+          gapEl.textContent = `${startMins - prevEndMins} min free`;
+          el.appendChild(gapEl);
+        }
+        const row = document.createElement('div');
+        row.className = 'schedule-entry';
+        row.innerHTML = `
+          <div class="schedule-time">
+            ${formatTime(item.departure_time)}<br>
+            <span style="color:var(--gray-400);">to ${endTimeStr(item.departure_time, exc.duration_hrs)}</span>
           </div>
-          ${isElizabeth() ? `<button class="btn btn-sm btn-danger" style="margin-top:6px;" onclick="confirmDrop('${entry.tourCode}','${entry.date}','${STATE.user}')">Drop</button>` : ''}
-        </div>
-      `;
-      el.appendChild(row);
-
-      exportLines.push(`  ${formatTime(entry.departure_time)} – ${endTimeStr(entry.departure_time, exc.duration_hrs)}  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
-      prevEndMins = endMins;
-    });
-
+          <div class="schedule-entry-body">
+            <div class="schedule-entry-name">${exc.name}</div>
+            <div class="schedule-entry-meta">${exc.price_usd===0?'Complimentary':'$'+exc.price_usd} · ${activityBadge(exc.activity_level)}</div>
+            ${isElizabeth() ? `<button class="btn btn-sm btn-danger" style="margin-top:6px;" onclick="confirmDrop('${item.tourCode}','${item.date}','${STATE.user}')">Drop</button>` : ''}
+          </div>
+        `;
+        el.appendChild(row);
+        exportLines.push(`  ${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}  ${exc.name}  (${ exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
+        prevEndMins = endMins;
+      } else {
+        const voteIcon = item.voteType === 'love' ? '❤️' : '🤔';
+        const timeStr = item.departure_time
+          ? `${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}`
+          : null;
+        const row = document.createElement('div');
+        row.className = 'schedule-entry wishlist';
+        row.style.cursor = 'pointer';
+        row.onclick = () => jumpToExcursion(item.tourCode);
+        row.innerHTML = `
+          <div class="schedule-time">
+            ${timeStr ? formatTime(item.departure_time) : '—'}
+            ${timeStr ? `<br><span style="color:var(--gray-400);">to ${endTimeStr(item.departure_time, exc.duration_hrs)}</span>` : ''}
+          </div>
+          <div class="schedule-entry-body">
+            <div class="schedule-entry-name">${exc.name}<span class="wishlist-badge">${voteIcon} Wishlist</span></div>
+            <div class="schedule-entry-meta">${exc.price_usd===0?'Complimentary':'$'+exc.price_usd} · ${activityBadge(exc.activity_level)}</div>
+            ${!timeStr ? `<div class="wishlist-pick-nudge">📅 Pick a date →</div>` : ''}
+          </div>
+        `;
+        el.appendChild(row);
+        exportLines.push(`  [Wishlist] ${timeStr || '(no date)'  }  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
+      }
+    }
     exportLines.push('');
   });
 
@@ -1047,6 +1071,11 @@ function renderScheduleTab() {
   exportBtn.style.padding = '16px';
   exportBtn.innerHTML = `<button class="btn btn-outline btn-full" onclick="exportSchedule(${JSON.stringify(exportLines).replace(/</g,'&lt;')})">📋 Copy schedule to clipboard</button>`;
   el.appendChild(exportBtn);
+}
+
+function toggleScheduleFilter(val) {
+  STATE.scheduleFilter = val;
+  renderScheduleTab();
 }
 
 function exportSchedule(lines) {
@@ -1058,6 +1087,126 @@ async function confirmDrop(code, date, person) {
   await dropExcursion(person, code, date);
   showToast('Dropped');
   renderScheduleTab();
+}
+
+/* ─────────────────────────────────────────────────
+   FLOW F — FEES TAB
+───────────────────────────────────────────────── */
+function renderFeesTab() {
+  const el = document.getElementById('screen-fees');
+  el.innerHTML = '';
+
+  const hdr = document.createElement('div');
+  hdr.className = 'tab-section-header';
+  hdr.innerHTML = `<div class="toggle-group">
+    <button class="toggle-btn ${STATE.feesView==='my'?'active':''}" onclick="toggleFeesView('my')">My costs</button>
+    <button class="toggle-btn ${STATE.feesView==='family'?'active':''}" onclick="toggleFeesView('family')">Family costs</button>
+  </div>`;
+  el.appendChild(hdr);
+
+  if (STATE.feesView === 'my') {
+    const fees = calcPersonFees(STATE.user);
+
+    const summary = document.createElement('div');
+    summary.className = 'fees-summary card';
+    summary.innerHTML = `
+      <div class="fees-summary-row">
+        <span>Confirmed</span>
+        <span class="fees-amount confirmed">$${fees.confirmed}</span>
+      </div>
+      <div class="fees-summary-row">
+        <span>Potential (love votes, not booked)</span>
+        <span class="fees-amount potential">$${fees.potential}</span>
+      </div>
+    `;
+    el.appendChild(summary);
+
+    if (fees.confirmed === 0 && fees.potential === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'fees-empty';
+      empty.innerHTML = `<div class="fees-empty-icon">💸</div>No paid excursions yet — all complimentary or no bookings/love votes!`;
+      el.appendChild(empty);
+      return;
+    }
+
+    if (fees.confirmedList.length > 0) {
+      const sect = document.createElement('div');
+      sect.className = 'fees-section';
+      sect.innerHTML = `<div class="fees-section-title">Confirmed</div>` +
+        fees.confirmedList.map(e => `<div class="fees-item">
+          <span class="fees-item-name">${e.name}</span>
+          <span class="fees-item-price">$${e.price}</span>
+        </div>`).join('');
+      el.appendChild(sect);
+    }
+
+    if (fees.potentialList.length > 0) {
+      const sect = document.createElement('div');
+      sect.className = 'fees-section';
+      sect.innerHTML = `<div class="fees-section-title">Wishlist (not yet booked)</div>` +
+        fees.potentialList.map(e => `<div class="fees-item potential">
+          <span class="fees-item-name">${e.name}</span>
+          <span class="fees-item-price">$${e.price}</span>
+        </div>`).join('');
+      el.appendChild(sect);
+    }
+  } else {
+    const { members, totalConfirmed, totalPotential } = calcFamilyFees();
+
+    const grandTotal = document.createElement('div');
+    grandTotal.className = 'fees-grand-total';
+    grandTotal.innerHTML = `<span>Grand total (confirmed)</span><span>$${totalConfirmed}</span>`;
+    el.appendChild(grandTotal);
+
+    const summary = document.createElement('div');
+    summary.className = 'fees-summary card';
+    summary.innerHTML = `
+      <div class="fees-summary-row">
+        <span>Total confirmed</span>
+        <span class="fees-amount confirmed">$${totalConfirmed}</span>
+      </div>
+      <div class="fees-summary-row">
+        <span>Total potential</span>
+        <span class="fees-amount potential">$${totalPotential}</span>
+      </div>
+    `;
+    el.appendChild(summary);
+
+    const sect = document.createElement('div');
+    sect.className = 'fees-section';
+    for (const m of members) {
+      const bodyId = `fees-acc-${m.person.toLowerCase()}`;
+      const hasFees = m.confirmed > 0 || m.potential > 0;
+      const acc = document.createElement('div');
+      acc.className = 'fees-accordion card';
+      acc.innerHTML = `
+        <div class="fees-acc-header" onclick="toggleFeesAccordion('${m.person}')">
+          <span class="fees-acc-name">${m.person}</span>
+          <span>
+            ${m.confirmed > 0 ? `<span class="fees-amount confirmed">$${m.confirmed}</span>` : ''}
+            ${m.potential > 0 ? `<span class="fees-amount potential" style="margin-left:4px;">+$${m.potential} potential</span>` : ''}
+            ${!hasFees ? `<span style="color:var(--gray-400);font-size:12px;">$0</span>` : ''}
+          </span>
+        </div>
+        ${hasFees ? `<div class="fees-acc-body hidden" id="${bodyId}">
+          ${m.confirmedList.map(e => `<div class="fees-item"><span>${e.name}</span><span>$${e.price}</span></div>`).join('')}
+          ${m.potentialList.map(e => `<div class="fees-item potential"><span>${e.name} (wishlist)</span><span>$${e.price}</span></div>`).join('')}
+        </div>` : ''}
+      `;
+      sect.appendChild(acc);
+    }
+    el.appendChild(sect);
+  }
+}
+
+function toggleFeesView(val) {
+  STATE.feesView = val;
+  renderFeesTab();
+}
+
+function toggleFeesAccordion(person) {
+  const body = document.getElementById(`fees-acc-${person.toLowerCase()}`);
+  if (body) body.classList.toggle('hidden');
 }
 
 /* ─────────────────────────────────────────────────
@@ -1208,6 +1357,9 @@ Object.assign(window, {
   openLockModal, confirmLock, closeGenericModal,
   openRequestModal, confirmRequest,
   confirmDrop, exportSchedule,
+  jumpToExcursion,
+  toggleScheduleFilter,
+  toggleFeesView, toggleFeesAccordion,
   copyReminder,
   changeName, showCredsModal, setFilterAccessible, setMaxPrice, resetMyVotes,
   syncFromSheets, showToast,

@@ -31,4 +31,6 @@ export const STATE = {
   syncing: false,
   lastSync: null,
   _pollTimer: null,
+  scheduleFilter: 'all',
+  feesView: 'my',
 };
