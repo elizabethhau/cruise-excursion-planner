@@ -76,6 +76,10 @@ function saveName(name) {
    INIT
 ───────────────────────────────────────────────── */
 function init() {
+  try {
+    const cached = JSON.parse(sessionStorage.getItem('cp_token') || 'null');
+    if (cached && cached.exp > Date.now() && STATE.accessToken) scheduleTokenRefresh(cached.exp);
+  } catch {}
   renderNameScreen();
   if (STATE.user) {
     document.getElementById('screen-name').classList.remove('active');
@@ -251,6 +255,42 @@ async function initSheets() {
    GIS OAUTH (popup flow)
 ───────────────────────────────────────────────── */
 let _gisClient = null;
+let _refreshTimer = null;
+
+function scheduleTokenRefresh(exp) {
+  if (_refreshTimer) { clearTimeout(_refreshTimer); _refreshTimer = null; }
+  const delay = Math.max(0, exp - Date.now() - 5 * 60 * 1000);
+  _refreshTimer = setTimeout(() => { _refreshTimer = null; refreshToken(); }, delay);
+}
+
+async function refreshToken() {
+  if (!STATE.creds.clientId) return;
+  if (!window.google?.accounts?.oauth2) {
+    await new Promise(resolve => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.onload = resolve;
+      document.head.appendChild(s);
+    });
+  }
+  window.google.accounts.oauth2.initTokenClient({
+    client_id: STATE.creds.clientId,
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    callback: (resp) => {
+      if (resp.error) {
+        STATE.accessToken = null;
+        showToast('Session expired — tap to re-authorize');
+        return;
+      }
+      STATE.accessToken = resp.access_token;
+      try {
+        const exp = Date.now() + 55 * 60 * 1000;
+        sessionStorage.setItem('cp_token', JSON.stringify({ tok: resp.access_token, exp }));
+        scheduleTokenRefresh(exp);
+      } catch {}
+    },
+  }).requestAccessToken({ prompt: '' });
+}
 
 function ensureGIS() {
   return new Promise((resolve) => {
@@ -1171,6 +1211,7 @@ Object.assign(window, {
   copyReminder,
   changeName, showCredsModal, setFilterAccessible, setMaxPrice, resetMyVotes,
   syncFromSheets, showToast,
+  refreshToken, scheduleTokenRefresh,
 });
 
 /* ─────────────────────────────────────────────────

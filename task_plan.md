@@ -258,6 +258,28 @@ Sub-tasks:
 - [x] **13c** — Fix `renderVoteTab` to re-use existing nav; expose `renderVoteTab` via window for testing
 - [ ] **13d** — Confirm GREEN; browser smoke test
 
+### Phase 14 — Token Auto-Refresh
+**Status:** `in_progress`
+
+Keep token in sessionStorage (55-min TTL) but add a proactive refresh timer so sessions never silently expire mid-use without a popup.
+
+**Decisions (from grill-me session 2026-05-25):**
+- Token stays in sessionStorage (not localStorage)
+- Proactive timer fires 5 min before expiry (at 50 min); if < 5 min left on startup, refresh immediately
+- Module-level `let _refreshTimer = null` (not in STATE)
+- `initGISClient` callback: skip `initSheets()` on refresh — pass `isRefresh` flag or split callbacks
+- `refreshToken()`: creates a one-off GIS client (no `initSheets`); on success → update `STATE.accessToken` + sessionStorage + schedule next refresh; on failure → clear `STATE.accessToken` + toast "Session expired — tap to re-authorize"
+- `scheduleTokenRefresh(exp)`: reads `exp`, schedules `_refreshTimer` at `exp - 5 min`; < 5 min → immediate
+- At startup: read `exp` from sessionStorage and call `scheduleTokenRefresh(exp)` if token was restored
+- On silent refresh failure: clear token, toast, let `requireAuth()` handle next re-auth normally
+- Call `ensureGIS()` from inside the refresh timer callback (lazy — GIS may not be loaded if session was restored from cache)
+
+Sub-tasks:
+- [ ] **14a** — Write RED tests: `scheduleTokenRefresh` fires at correct time, `refreshToken` updates token + sessionStorage, failure path clears token
+- [ ] **14b** — Implement `scheduleTokenRefresh(exp)` and `refreshToken()` in app.js; guard `initSheets()` call
+- [ ] **14c** — Wire startup: call `scheduleTokenRefresh` when token is restored from sessionStorage on load
+- [ ] **14d** — Confirm GREEN; manual smoke test in browser
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|

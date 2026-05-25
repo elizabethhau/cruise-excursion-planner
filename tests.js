@@ -396,6 +396,60 @@ console.log('\nDOM: port nav scroll preservation');
       assert.ok(!navWasRemoved, '#port-nav must not be removed from its parent during re-render');
     });
   })();
+
+  /* ─────────────────────────────────────────────────
+     DOM: token auto-refresh (jsdom)
+  ───────────────────────────────────────────────── */
+  console.log('\nDOM: token auto-refresh');
+
+  STATE.creds.clientId = 'test-client-id';
+
+  function makeGIS(response) {
+    w.google = {
+      accounts: { oauth2: { initTokenClient: config => ({
+        requestAccessToken: () => config.callback(response),
+      })}},
+    };
+  }
+
+  await (async () => {
+    makeGIS({ access_token: 'new-token-abc' });
+    STATE.accessToken = null;
+    await w.refreshToken();
+    it('refreshToken success: STATE.accessToken updated', () => {
+      assert.equal(STATE.accessToken, 'new-token-abc');
+    });
+  })();
+
+  await (async () => {
+    makeGIS({ access_token: 'fresh-tok-xyz' });
+    STATE.accessToken = null;
+    await w.refreshToken();
+    const stored = JSON.parse(w.sessionStorage.getItem('cp_token'));
+    it('refreshToken success: sessionStorage cp_token updated', () => {
+      assert.equal(stored.tok, 'fresh-tok-xyz');
+      assert.ok(stored.exp > Date.now(), 'exp should be in the future');
+    });
+  })();
+
+  await (async () => {
+    makeGIS({ error: 'access_denied' });
+    STATE.accessToken = 'still-valid';
+    await w.refreshToken();
+    it('refreshToken failure: STATE.accessToken cleared', () => {
+      assert.equal(STATE.accessToken, null);
+    });
+  })();
+
+  await (async () => {
+    makeGIS({ access_token: 'near-expiry-refresh' });
+    STATE.accessToken = null;
+    w.scheduleTokenRefresh(Date.now() + 2 * 60 * 1000);
+    await new Promise(r => setTimeout(r, 10));
+    it('scheduleTokenRefresh: near-expiry fires refresh within 10ms', () => {
+      assert.equal(STATE.accessToken, 'near-expiry-refresh');
+    });
+  })();
 }
 
 /* ─────────────────────────────────────────────────
