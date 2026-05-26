@@ -328,6 +328,39 @@ Sub-tasks:
 - [x] **16d** — Implement `renderFeesTab()` in app.js: "My costs | Family costs" toggle; personal view renders confirmed + potential subtotals + itemised list (excursion name + price + booked/love badge)
 - [x] **16e** — Family costs view in `renderFeesTab()`: per-person accordion rows (tap to expand/collapse excursion list), grand total footer row
 
+### Phase 17 — Schedule Tab Accordion Expansion
+**Status:** `complete`
+
+Replace the current click-to-navigate behavior on schedule items with an accordion that expands inline to show full details, with a button inside to navigate to the voting page.
+
+**Decisions (from grill-me session 2026-05-25):**
+- Accordion applies to BOTH booked and wishlist items
+- Expanded section shows: full description + badges not already visible (meal_included, accessible, go_local, free_shore)
+- Multiple accordions open simultaneously — independent toggles per card
+- Drop button (Elizabeth, booked only) stays inline on collapsed card; needs `event.stopPropagation()` to prevent toggling accordion
+- Expand trigger: tap anywhere on the card header row
+- Expand state: resets on every tab visit (no STATE entry — DOM-only toggle)
+- "Vote →" button inside expanded section navigates to vote tab via `jumpToExcursion(code)`
+- "📅 Pick a date →" nudge stays on the collapsed card (not moved into expanded)
+- Chevron indicator (▶/▼) in collapsed header to signal expandability
+
+Sub-tasks:
+- [x] **17a** — Write RED tests for `buildScheduleItemHTML(item, isExpanded)` — 10 behaviors:
+  1. Collapsed: contains excursion name
+  2. Collapsed: contains chevron indicator (▶)
+  3. Collapsed: does NOT contain description text
+  4. Collapsed: does NOT contain "Vote →"
+  5. Collapsed wishlist, no departure_time: contains "📅 Pick a date →"
+  6. Collapsed wishlist, with departure_time: does NOT contain "📅 Pick a date →"
+  7. Expanded: contains full description text
+  8. Expanded: contains "Vote →"
+  9. Expanded: meal badge present when meal_included true; absent when false
+  10. Expanded: accessible badge present when accessible true; absent when false
+- [x] **17b** — Extract `buildScheduleItemHTML(item, isExpanded)` into core.js; make GREEN (10/10)
+- [x] **17c** — Update `renderScheduleTab()` in app.js: render all items collapsed; wire `toggleScheduleItem(code)` as onclick on card; `stopPropagation()` on Drop button; "Vote →" calls `jumpToExcursion(code)`
+- [x] **17d** — Add `.schedule-accordion-body` CSS (hidden/shown); chevron rotation class; description uses existing `.exc-desc` (pre-wrap already set)
+- [ ] **17e** — Confirm: `node tests.js` green; browser smoke test both booked and wishlist items expand/collapse, "Vote →" navigates correctly
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|

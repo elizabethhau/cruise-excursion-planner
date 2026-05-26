@@ -6,7 +6,8 @@ import {
   voteOf, findExcursion, findPortForCode, summarizeVotes,
   getMyScheduleEntries, getConflictsForPerson, conflictLevelForExcursion,
   parseSheetsRows, renderOfferingOptions,
-  buildScheduleItems, calcPersonFees, calcFamilyFees,
+  buildScheduleItems, buildScheduleAccordionBody, buildScheduleItemHTML,
+  calcPersonFees, calcFamilyFees,
 } from './core.js';
 
 /* ─────────────────────────────────────────────────
@@ -964,7 +965,10 @@ function closeGenericModal() {
 /* ─────────────────────────────────────────────────
    FLOW D — PERSONAL SCHEDULE
 ───────────────────────────────────────────────── */
+let _scheduleItems = {};
+
 function renderScheduleTab() {
+  _scheduleItems = {};
   const el = document.getElementById('screen-schedule');
   el.innerHTML = '';
 
@@ -989,12 +993,14 @@ function renderScheduleTab() {
 
   const byDate = {};
   for (const item of items) {
+    _scheduleItems[item.tourCode] = item;
     if (!byDate[item.date]) byDate[item.date] = [];
     byDate[item.date].push(item);
   }
 
   const allDates = [...new Set(EXCURSION_DATA.ports.flatMap(p => p.dates))].sort();
   const exportLines = ['CRUISE EXCURSION SCHEDULE — ' + (STATE.user || 'My Schedule'), ''];
+  const opts = { isAdmin: isElizabeth(), person: STATE.user };
 
   allDates.forEach(date => {
     if (!byDate[date]) return;
@@ -1024,49 +1030,17 @@ function renderScheduleTab() {
         const startMins = toMins(item.departure_time);
         const endMins   = startMins + Math.round(exc.duration_hrs * 60);
         if (prevEndMins !== null && startMins > prevEndMins) {
-          const gapEl = document.createElement('div');
-          gapEl.className = 'gap-label';
-          gapEl.textContent = `${startMins - prevEndMins} min free`;
-          el.appendChild(gapEl);
+          el.insertAdjacentHTML('beforeend', `<div class="gap-label">${startMins - prevEndMins} min free</div>`);
         }
-        const row = document.createElement('div');
-        row.className = 'schedule-entry';
-        row.innerHTML = `
-          <div class="schedule-time">
-            ${formatTime(item.departure_time)}<br>
-            <span style="color:var(--gray-400);">to ${endTimeStr(item.departure_time, exc.duration_hrs)}</span>
-          </div>
-          <div class="schedule-entry-body">
-            <div class="schedule-entry-name">${exc.name}</div>
-            <div class="schedule-entry-meta">${exc.price_usd===0?'Complimentary':'$'+exc.price_usd} · ${activityBadge(exc.activity_level)}</div>
-            ${isElizabeth() ? `<button class="btn btn-sm btn-danger" style="margin-top:6px;" onclick="confirmDrop('${item.tourCode}','${item.date}','${STATE.user}')">Drop</button>` : ''}
-          </div>
-        `;
-        el.appendChild(row);
-        exportLines.push(`  ${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}  ${exc.name}  (${ exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
+        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, false, opts));
+        exportLines.push(`  ${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
         prevEndMins = endMins;
       } else {
-        const voteIcon = item.voteType === 'love' ? '❤️' : '🤔';
         const timeStr = item.departure_time
           ? `${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}`
           : null;
-        const row = document.createElement('div');
-        row.className = 'schedule-entry wishlist';
-        row.style.cursor = 'pointer';
-        row.onclick = () => jumpToExcursion(item.tourCode);
-        row.innerHTML = `
-          <div class="schedule-time">
-            ${timeStr ? formatTime(item.departure_time) : '—'}
-            ${timeStr ? `<br><span style="color:var(--gray-400);">to ${endTimeStr(item.departure_time, exc.duration_hrs)}</span>` : ''}
-          </div>
-          <div class="schedule-entry-body">
-            <div class="schedule-entry-name">${exc.name}<span class="wishlist-badge">${voteIcon} Wishlist</span></div>
-            <div class="schedule-entry-meta">${exc.price_usd===0?'Complimentary':'$'+exc.price_usd} · ${activityBadge(exc.activity_level)}</div>
-            ${!timeStr ? `<div class="wishlist-pick-nudge">📅 Pick a date →</div>` : ''}
-          </div>
-        `;
-        el.appendChild(row);
-        exportLines.push(`  [Wishlist] ${timeStr || '(no date)'  }  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
+        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, false, opts));
+        exportLines.push(`  [Wishlist] ${timeStr || '(no date)'}  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
       }
     }
     exportLines.push('');
@@ -1076,6 +1050,22 @@ function renderScheduleTab() {
   exportBtn.style.padding = '16px';
   exportBtn.innerHTML = `<button class="btn btn-outline btn-full" onclick="exportSchedule(${JSON.stringify(exportLines).replace(/</g,'&lt;')})">📋 Copy schedule to clipboard</button>`;
   el.appendChild(exportBtn);
+}
+
+function toggleScheduleItem(code) {
+  const card = document.querySelector(`.schedule-entry[data-code="${code}"]`);
+  if (!card) return;
+  const body = card.querySelector('.schedule-accordion-body');
+  const chevron = card.querySelector('.schedule-chevron');
+  if (body) {
+    body.remove();
+    chevron.textContent = '▶';
+  } else {
+    const item = _scheduleItems[code];
+    if (!item) return;
+    card.insertAdjacentHTML('beforeend', buildScheduleAccordionBody(item));
+    chevron.textContent = '▼';
+  }
 }
 
 function toggleScheduleFilter(val) {
@@ -1362,7 +1352,7 @@ Object.assign(window, {
   openLockModal, confirmLock, closeGenericModal,
   openRequestModal, confirmRequest,
   confirmDrop, exportSchedule,
-  jumpToExcursion,
+  jumpToExcursion, toggleScheduleItem,
   toggleScheduleFilter,
   toggleFeesView, toggleFeesAccordion,
   copyReminder,

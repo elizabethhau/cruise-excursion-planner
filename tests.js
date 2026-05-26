@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions, buildScheduleItems, calcPersonFees, calcFamilyFees } from './core.js';
+import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions, buildScheduleItems, buildScheduleItemHTML, calcPersonFees, calcFamilyFees } from './core.js';
 import { STATE } from './state.js';
 
 function resetState() {
@@ -429,6 +429,73 @@ it('items sorted by date then departure_time; null departure_time sorts last wit
   assert.equal(items[1].tourCode, 'MEB-001'); // 2026-12-31 null (fallback to Melbourne first date)
   assert.equal(items[2].tourCode, 'HBA-013'); // 2027-01-03 10:00
 });
+
+/* ─────────────────────────────────────────────────
+   buildScheduleItemHTML
+───────────────────────────────────────────────── */
+console.log('\nbuildScheduleItemHTML');
+{
+  const baseExc = {
+    code: 'TEST-001',
+    name: 'Amazing Cave Tour',
+    duration_hrs: 3,
+    price_usd: 150,
+    activity_level: 'light',
+    meal_included: false,
+    accessible: false,
+    go_local: false,
+    free_shore: false,
+    description: 'Unique underground adventure through ancient caves.',
+    offerings: [{ date: '2026-12-31', departure_time: '09:00' }],
+  };
+  const bookedItem = { type: 'booked', tourCode: 'TEST-001', date: '2026-12-31', departure_time: '09:00', exc: baseExc };
+  const wishlistNoDate = { type: 'wishlist', tourCode: 'TEST-002', date: '2026-12-31', departure_time: null, exc: baseExc, voteType: 'love' };
+  const wishlistWithDate = { type: 'wishlist', tourCode: 'TEST-003', date: '2026-12-31', departure_time: '10:00', exc: baseExc, voteType: 'interested' };
+
+  it('collapsed booked: contains excursion name', () => {
+    assert.ok(buildScheduleItemHTML(bookedItem, false).includes('Amazing Cave Tour'));
+  });
+
+  it('collapsed: contains chevron indicator ▶', () => {
+    assert.ok(buildScheduleItemHTML(bookedItem, false).includes('▶'));
+  });
+
+  it('collapsed: does NOT contain description text', () => {
+    assert.ok(!buildScheduleItemHTML(bookedItem, false).includes('Unique underground adventure'));
+  });
+
+  it('collapsed: does NOT contain "Vote →"', () => {
+    assert.ok(!buildScheduleItemHTML(bookedItem, false).includes('Vote →'));
+  });
+
+  it('collapsed wishlist no departure_time: contains pick-a-date nudge', () => {
+    assert.ok(buildScheduleItemHTML(wishlistNoDate, false).includes('📅 Pick a date →'));
+  });
+
+  it('collapsed wishlist with departure_time: does NOT contain pick-a-date nudge', () => {
+    assert.ok(!buildScheduleItemHTML(wishlistWithDate, false).includes('📅 Pick a date →'));
+  });
+
+  it('expanded: contains description text', () => {
+    assert.ok(buildScheduleItemHTML(bookedItem, true).includes('Unique underground adventure'));
+  });
+
+  it('expanded: contains "Vote →" button', () => {
+    assert.ok(buildScheduleItemHTML(bookedItem, true).includes('Vote →'));
+  });
+
+  it('expanded: meal badge present when meal_included true, absent when false', () => {
+    const withMeal = { ...bookedItem, exc: { ...baseExc, meal_included: true } };
+    assert.ok(buildScheduleItemHTML(withMeal, true).includes('Meal'));
+    assert.ok(!buildScheduleItemHTML(bookedItem, true).includes('Meal'));
+  });
+
+  it('expanded: accessible badge present when accessible true, absent when false', () => {
+    const withAccess = { ...bookedItem, exc: { ...baseExc, accessible: true } };
+    assert.ok(buildScheduleItemHTML(withAccess, true).includes('Accessible'));
+    assert.ok(!buildScheduleItemHTML(bookedItem, true).includes('Accessible'));
+  });
+}
 
 /* ─────────────────────────────────────────────────
    calcPersonFees

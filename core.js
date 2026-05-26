@@ -237,6 +237,38 @@ export function buildScheduleItems(person) {
 }
 
 /* ─────────────────────────────────────────────────
+   SCHEDULE ITEM HTML (accordion cards)
+───────────────────────────────────────────────── */
+export function buildScheduleAccordionBody(item) {
+  const { tourCode: code, exc } = item;
+  return `<div class="schedule-accordion-body">
+  <div class="exc-desc">${exc.description || ''}</div>
+  <div class="schedule-badge-row">
+    ${exc.meal_included ? '<span class="badge badge-meal">🍽️ Meal</span>' : ''}
+    ${exc.accessible ? '<span class="badge badge-accessible">♿ Accessible</span>' : ''}
+    ${exc.go_local ? '<span class="badge badge-go-local">📍 Go Local</span>' : ''}
+  </div>
+  <button class="btn btn-sm btn-outline schedule-vote-btn" onclick="event.stopPropagation(); jumpToExcursion('${code}')">Vote →</button>
+</div>`;
+}
+
+export function buildScheduleItemHTML(item, isExpanded, opts = {}) {
+  const { isAdmin = false, person = '' } = opts;
+  const { tourCode: code, exc, departure_time, type, voteType } = item;
+  const timeCol = departure_time
+    ? `${formatTime(departure_time)}<br><span style="color:var(--gray-400);">to ${endTimeStr(departure_time, exc.duration_hrs)}</span>`
+    : '—';
+  const voteIcon = voteType === 'love' ? '❤️' : '🤔';
+  const dropBtn = isAdmin && type === 'booked'
+    ? `<button class="btn btn-sm btn-danger" style="margin-top:6px;" onclick="event.stopPropagation(); confirmDrop('${code}','${item.date}','${person}')">Drop</button>`
+    : '';
+  const nudge = !departure_time && type === 'wishlist'
+    ? '<div class="wishlist-pick-nudge">📅 Pick a date →</div>'
+    : '';
+  return `<div class="schedule-entry${type === 'wishlist' ? ' wishlist' : ''}" data-code="${code}"><div class="schedule-item-header" onclick="toggleScheduleItem('${code}')"><div class="schedule-time">${timeCol}</div><div class="schedule-entry-body"><div class="schedule-entry-name">${exc.name}${type === 'wishlist' ? `<span class="wishlist-badge">${voteIcon} Wishlist</span>` : ''}</div><div class="schedule-entry-meta">${exc.price_usd === 0 ? 'Complimentary' : '$' + exc.price_usd} · ${activityBadge(exc.activity_level)}</div>${dropBtn}${nudge}</div><span class="schedule-chevron">▶</span></div>${isExpanded ? buildScheduleAccordionBody(item) : ''}</div>`;
+}
+
+/* ─────────────────────────────────────────────────
    FEES CALCULATION
 ───────────────────────────────────────────────── */
 export function calcPersonFees(person) {
