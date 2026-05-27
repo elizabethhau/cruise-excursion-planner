@@ -265,7 +265,7 @@ export function buildScheduleItemHTML(item, isExpanded, opts = {}) {
   const nudge = !departure_time && type === 'wishlist'
     ? '<div class="wishlist-pick-nudge">📅 Pick a date →</div>'
     : '';
-  return `<div class="schedule-entry${type === 'wishlist' ? ' wishlist' : ''}" data-code="${code}"><div class="schedule-item-header" onclick="toggleScheduleItem('${code}')"><div class="schedule-time">${timeCol}</div><div class="schedule-entry-body"><div class="schedule-entry-name">${exc.name}${type === 'wishlist' ? `<span class="wishlist-badge">${voteIcon} Wishlist</span>` : ''}</div><div class="schedule-entry-meta">${exc.price_usd === 0 ? 'Complimentary' : '$' + exc.price_usd} · ${activityBadge(exc.activity_level)}</div>${dropBtn}${nudge}</div><span class="schedule-chevron">▶</span></div>${isExpanded ? buildScheduleAccordionBody(item) : ''}</div>`;
+  return `<div class="schedule-entry${type === 'wishlist' ? ' wishlist' : ''}" data-code="${code}"><div class="schedule-item-header" onclick="toggleScheduleItem('${code}')"><div class="schedule-time">${timeCol}</div><div class="schedule-entry-body"><div class="schedule-entry-name">${exc.name}${type === 'wishlist' ? `<span class="wishlist-badge">${voteIcon} Wishlist</span>` : ''}</div><div class="schedule-entry-meta">${exc.price_usd === 0 ? 'Complimentary' : '$' + exc.price_usd} · ${activityBadge(exc.activity_level)}</div>${dropBtn}${nudge}</div><span class="schedule-chevron">${isExpanded ? '▼' : '▶'}</span></div>${isExpanded ? buildScheduleAccordionBody(item) : ''}</div>`;
 }
 
 /* ─────────────────────────────────────────────────

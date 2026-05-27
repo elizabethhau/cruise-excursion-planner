@@ -348,12 +348,16 @@ async function syncFromSheets() {
     ]);
 
     const parsed = parseSheetsRows(votesRaw, schedRaw, reqRaw);
+    const dataChanged =
+      JSON.stringify(parsed.votes)    !== JSON.stringify(STATE.votes)    ||
+      JSON.stringify(parsed.schedule) !== JSON.stringify(STATE.schedule) ||
+      JSON.stringify(parsed.requests) !== JSON.stringify(STATE.requests);
     if (votesRaw) STATE.votes    = parsed.votes;
     if (schedRaw) STATE.schedule = parsed.schedule;
     if (reqRaw)   STATE.requests = parsed.requests;
     STATE.lastSync = new Date();
     updateSyncBadge('ok');
-    renderCurrentTab();
+    if (dataChanged) renderCurrentTab();
     await processQueue();
   } catch(e) {
     updateSyncBadge('error');
@@ -983,6 +987,11 @@ let _scheduleItems = {};
 function renderScheduleTab() {
   _scheduleItems = {};
   const el = document.getElementById('screen-schedule');
+  const openCodes = new Set(
+    [...el.querySelectorAll('.schedule-entry')]
+      .filter(c => c.querySelector('.schedule-accordion-body'))
+      .map(c => c.dataset.code)
+  );
   el.innerHTML = '';
 
   const hdr = document.createElement('div');
@@ -1045,14 +1054,14 @@ function renderScheduleTab() {
         if (prevEndMins !== null && startMins > prevEndMins) {
           el.insertAdjacentHTML('beforeend', `<div class="gap-label">${startMins - prevEndMins} min free</div>`);
         }
-        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, false, opts));
+        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, openCodes.has(item.tourCode), opts));
         exportLines.push(`  ${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
         prevEndMins = endMins;
       } else {
         const timeStr = item.departure_time
           ? `${formatTime(item.departure_time)} – ${endTimeStr(item.departure_time, exc.duration_hrs)}`
           : null;
-        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, false, opts));
+        el.insertAdjacentHTML('beforeend', buildScheduleItemHTML(item, openCodes.has(item.tourCode), opts));
         exportLines.push(`  [Wishlist] ${timeStr || '(no date)'}  ${exc.name}  (${exc.price_usd===0?'Complimentary':'$'+exc.price_usd})`);
       }
     }
