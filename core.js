@@ -307,6 +307,24 @@ export function calcFamilyFees() {
   return { members, totalConfirmed, totalPotential };
 }
 
+export function bookedCountForExcursion(code) {
+  const people = new Set(
+    STATE.schedule
+      .filter(s => s.tourCode === code && s.status === 'booked')
+      .map(s => s.personName)
+  );
+  return people.size;
+}
+
+export function bookedPeopleForPort(portCodes) {
+  const people = new Set(
+    STATE.schedule
+      .filter(s => portCodes.includes(s.tourCode) && s.status === 'booked')
+      .map(s => s.personName)
+  );
+  return people.size;
+}
+
 export function conflictLevelForExcursion(exc, person) {
   // Check booked conflicts (confirmed)
   for (const off of exc.offerings) {

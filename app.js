@@ -8,6 +8,7 @@ import {
   parseSheetsRows, renderOfferingOptions,
   buildScheduleItems, buildScheduleAccordionBody, buildScheduleItemHTML,
   calcPersonFees, calcFamilyFees,
+  bookedCountForExcursion, bookedPeopleForPort,
 } from './core.js';
 
 /* ─────────────────────────────────────────────────
@@ -754,6 +755,12 @@ function renderDashTab() {
     const total    = FAMILY.length;
     const status   = portCompletionStatus(portIdx);
 
+    const portCodes = port.excursions.map(e => e.code);
+    const bookedPeople = isElizabeth() ? bookedPeopleForPort(portCodes) : 0;
+    const bookedBadge = isElizabeth() && bookedPeople > 0
+      ? `<span style="font-size:13px;color:var(--green);">📖 ${bookedPeople}/${total}</span>`
+      : '';
+
     block.innerHTML = `
       <div class="dash-port-header" onclick="this.nextElementSibling.classList.toggle('hidden')">
         <div>
@@ -761,6 +768,7 @@ function renderDashTab() {
           <div style="font-size:12px;color:var(--gray-400);">${port.dates.map(fmtDate).join(' & ')}</div>
         </div>
         <div class="dash-port-status">
+          ${bookedBadge}
           <span>${portStatusEmoji(status)} ${complete}/${total}</span>
           <span style="font-size:18px;">›</span>
         </div>
@@ -795,7 +803,12 @@ function renderDashTab() {
           <div class="dash-exc-code">${exc.code} · ${exc.duration_hrs}h · ${exc.price_usd===0?'Complimentary':'$'+exc.price_usd}</div>
           <div class="avatar-row">${avatars}</div>
         </div>
-        ${isElizabeth() ? `<button class="btn btn-sm btn-purple" onclick="openLockModal('${exc.code}',null)">Lock</button>` : `<button class="btn btn-sm btn-outline" onclick="openRequestModal('${exc.code}')">Request</button>`}
+        ${isElizabeth() ? (() => {
+          const n = bookedCountForExcursion(exc.code);
+          const cls = n === 0 ? 'btn-purple' : n >= FAMILY.length ? 'btn-green' : 'btn-amber';
+          const lbl = n === 0 ? 'Lock' : `Booked: ${n}`;
+          return `<button class="btn btn-sm ${cls}" onclick="openLockModal('${exc.code}',null)">${lbl}</button>`;
+        })() : `<button class="btn btn-sm btn-outline" onclick="openRequestModal('${exc.code}')">Request</button>`}
       `;
       body.appendChild(row);
     });

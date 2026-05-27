@@ -402,6 +402,8 @@ img { display: block; max-width: 100%; }
 .btn-outline   { border: 1.5px solid var(--gray-200); color: var(--gray-700); background: var(--white); }
 .btn-danger    { background: var(--red-bg); color: var(--red-text); }
 .btn-purple    { background: var(--purple); color: var(--white); }
+.btn-green     { background: var(--green);  color: var(--white); }
+.btn-amber     { background: var(--yellow); color: var(--white); }
 .btn-full      { width: 100%; }
 .btn-sm        { padding: 8px 14px; font-size: 13px; min-height: 36px; }
 

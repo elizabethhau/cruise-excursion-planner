@@ -361,6 +361,28 @@ Sub-tasks:
 - [x] **17d** — Add `.schedule-accordion-body` CSS (hidden/shown); chevron rotation class; description uses existing `.exc-desc` (pre-wrap already set)
 - [ ] **17e** — Confirm: `node tests.js` green; browser smoke test both booked and wishlist items expand/collapse, "Vote →" navigates correctly
 
+### Phase 18 — Dashboard Lock Button Status + Port Booked Badge
+**Status:** `complete`
+
+Make the dashboard more intuitive by surfacing real booking state: Lock button reflects how many people are booked, and the port header shows a per-port booked headcount (Elizabeth-only).
+
+**Decisions (from grill-me session 2026-05-26):**
+- ≥1 person booked → show "Booked: N" button instead of "Lock"; still opens same Lock modal (add-only; existing bookings remain read-only inside modal)
+- Three-state button colors: purple "Lock" (0 booked), amber "Booked: N" (1–6 booked), green "Booked: N" (7/7 booked)
+- Port header: add `📖 N/7` badge showing unique people with ≥1 booked excursion at that port — Elizabeth-only, only rendered when N ≥ 1
+
+**New `core.js` functions (testable, no DOM):**
+- `bookedCountForExcursion(code, schedule)` → count of unique FAMILY members with `status: 'booked'` for that tourCode
+- `bookedPeopleForPort(portCodes, schedule)` → count of unique FAMILY members with ≥1 booked excursion among the given codes
+
+Sub-tasks:
+- [x] **18a** — Write RED tests for `bookedCountForExcursion`: empty schedule returns 0; one person booked; multiple people booked; `dropped` status excluded; different tourCode excluded
+- [x] **18b** — Write RED tests for `bookedPeopleForPort`: no bookings returns 0; partial across multiple codes; full 7/7; counts each person only once even if they have multiple excursions at port
+- [x] **18c** — Implement both functions in `core.js`; confirm GREEN
+- [x] **18d** — Update dashboard excursion row in `app.js` (~line 798): replace static "Lock" button with three-state button using `bookedCountForExcursion`; add `btn-amber` + `btn-green` CSS classes to `styles.css`
+- [x] **18e** — Update port header in `app.js` (~line 757): inject `📖 N/7` badge when `isElizabeth() && N >= 1`, using `bookedPeopleForPort`
+- [ ] **18f** — Browser smoke test: Dunedin shows "Booked: 7" in green + `📖 7/7` in header
+
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|

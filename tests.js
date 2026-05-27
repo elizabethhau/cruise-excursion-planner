@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { JSDOM } from 'jsdom';
-import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions, buildScheduleItems, buildScheduleItemHTML, calcPersonFees, calcFamilyFees } from './core.js';
+import { summarizeVotes, getConflictsForPerson, conflictLevelForExcursion, findExcursion, parseSheetsRows, renderOfferingOptions, buildScheduleItems, buildScheduleItemHTML, calcPersonFees, calcFamilyFees, bookedCountForExcursion, bookedPeopleForPort } from './core.js';
 import { STATE } from './state.js';
 
 function resetState() {
@@ -727,6 +727,89 @@ console.log('\nDOM: port nav scroll preservation');
     });
   })();
 }
+
+/* ─────────────────────────────────────────────────
+   bookedCountForExcursion
+───────────────────────────────────────────────── */
+console.log('\nbookedCountForExcursion');
+
+it('empty schedule → 0', () => {
+  resetState();
+  assert.equal(bookedCountForExcursion('DUD-005'), 0);
+});
+
+it('one person booked → 1', () => {
+  resetState();
+  STATE.schedule = [{ personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' }];
+  assert.equal(bookedCountForExcursion('DUD-005'), 1);
+});
+
+it('multiple people booked → correct count', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' },
+    { personName: 'Dad',       tourCode: 'DUD-005', status: 'booked' },
+    { personName: 'Mom',       tourCode: 'DUD-005', status: 'booked' },
+  ];
+  assert.equal(bookedCountForExcursion('DUD-005'), 3);
+});
+
+it('dropped status excluded', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' },
+    { personName: 'Dad',       tourCode: 'DUD-005', status: 'dropped' },
+  ];
+  assert.equal(bookedCountForExcursion('DUD-005'), 1);
+});
+
+it('different tourCode excluded', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'DUD-013', status: 'booked' },
+  ];
+  assert.equal(bookedCountForExcursion('DUD-005'), 0);
+});
+
+/* ─────────────────────────────────────────────────
+   bookedPeopleForPort
+───────────────────────────────────────────────── */
+console.log('\nbookedPeopleForPort');
+
+it('no bookings → 0', () => {
+  resetState();
+  assert.equal(bookedPeopleForPort(['DUD-005', 'DUD-013']), 0);
+});
+
+it('one person booked on one excursion → 1', () => {
+  resetState();
+  STATE.schedule = [{ personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' }];
+  assert.equal(bookedPeopleForPort(['DUD-005', 'DUD-013']), 1);
+});
+
+it('same person booked on two excursions at port → counted once', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' },
+    { personName: 'Elizabeth', tourCode: 'DUD-013', status: 'booked' },
+  ];
+  assert.equal(bookedPeopleForPort(['DUD-005', 'DUD-013']), 1);
+});
+
+it('different people booked on different excursions → sum of unique', () => {
+  resetState();
+  STATE.schedule = [
+    { personName: 'Elizabeth', tourCode: 'DUD-005', status: 'booked' },
+    { personName: 'Dad',       tourCode: 'DUD-013', status: 'booked' },
+  ];
+  assert.equal(bookedPeopleForPort(['DUD-005', 'DUD-013']), 2);
+});
+
+it('excursion from different port excluded', () => {
+  resetState();
+  STATE.schedule = [{ personName: 'Elizabeth', tourCode: 'CHC-001', status: 'booked' }];
+  assert.equal(bookedPeopleForPort(['DUD-005', 'DUD-013']), 0);
+});
 
 /* ─────────────────────────────────────────────────
    RESULTS
