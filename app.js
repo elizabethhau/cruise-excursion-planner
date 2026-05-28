@@ -352,9 +352,9 @@ async function syncFromSheets() {
       JSON.stringify(parsed.votes)    !== JSON.stringify(STATE.votes)    ||
       JSON.stringify(parsed.schedule) !== JSON.stringify(STATE.schedule) ||
       JSON.stringify(parsed.requests) !== JSON.stringify(STATE.requests);
-    if (votesRaw) STATE.votes    = parsed.votes;
-    if (schedRaw) STATE.schedule = parsed.schedule;
-    if (reqRaw)   STATE.requests = parsed.requests;
+    STATE.votes    = parsed.votes;
+    STATE.schedule = parsed.schedule;
+    STATE.requests = parsed.requests;
     STATE.lastSync = new Date();
     updateSyncBadge('ok');
     if (dataChanged) renderCurrentTab();

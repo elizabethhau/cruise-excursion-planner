@@ -30,6 +30,9 @@
   --purple-bg:   #EDE9FE;
   --purple-text: #4C1D95;
 
+  --sky-bg:   #E0F2FE;
+  --sky-text: #0C4A6E;
+
   --gray-50:  #F9FAFB;
   --gray-100: #F3F4F6;
   --gray-200: #E5E7EB;
@@ -617,6 +620,7 @@ img { display: block; max-width: 100%; }
 .badge-meal       { background: var(--cream-dark); color: var(--navy-mid); }
 .badge-accessible { background: var(--teal-bg);   color: var(--teal-text); }
 .badge-go-local   { background: var(--purple-bg);  color: var(--purple-text); }
+.badge-free-shore { background: var(--sky-bg);     color: var(--sky-text); }
 .badge-review     { background: var(--gray-100);   color: var(--gray-500); font-style: italic; }
 
 /* port completion pill */

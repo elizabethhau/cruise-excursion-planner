@@ -495,6 +495,12 @@ console.log('\nbuildScheduleItemHTML');
     assert.ok(buildScheduleItemHTML(withAccess, true).includes('Accessible'));
     assert.ok(!buildScheduleItemHTML(bookedItem, true).includes('Accessible'));
   });
+
+  it('expanded: free_shore badge present when free_shore true, absent when false', () => {
+    const withFreeShore = { ...bookedItem, exc: { ...baseExc, free_shore: true } };
+    assert.ok(buildScheduleItemHTML(withFreeShore, true).includes('Free Shore'));
+    assert.ok(!buildScheduleItemHTML(bookedItem, true).includes('Free Shore'));
+  });
 }
 
 /* ─────────────────────────────────────────────────
